@@ -6,10 +6,14 @@ import { ChatSidebar } from "./ChatSidebar";
 import { KanbanBoard } from "./KanbanBoard";
 import { LoginForm } from "./LoginForm";
 
+const SAVE_ERROR = "A change could not be saved. Reload to see the saved board.";
+
 export function App() {
   const [user, setUser] = useState<string | null>();
   const [board, setBoard] = useState<Board | null>(null);
   const saving = useRef(Promise.resolve());
+  const [saveError, setSaveError] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
 
   useEffect(() => {
     fetch("/api/me")
@@ -36,13 +40,24 @@ export function App() {
           body: JSON.stringify(next),
         }),
       )
-      .then(() => undefined, console.error);
+      .then(
+        (r) => {
+          if (r.status === 401) signOut();
+          else if (!r.ok) setSaveError(SAVE_ERROR);
+        },
+        () => setSaveError(SAVE_ERROR),
+      );
+  }
+
+  function signOut() {
+    setUser(null);
+    setBoard(null);
+    setSaveError("");
   }
 
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
-    setUser(null);
-    setBoard(null);
+    signOut();
   }
 
   if (user === undefined) return null;
@@ -50,9 +65,20 @@ export function App() {
   if (!board) return null;
   return (
     <div className="flex flex-1">
-      <KanbanBoard board={board} onChange={updateBoard} onLogout={logout} />
+      {saveError && (
+        <p role="alert" className="fixed left-1/2 top-4 z-10 -translate-x-1/2 rounded-md bg-red-600 px-4 py-2 text-sm text-white shadow-lg">
+          {saveError}
+        </p>
+      )}
+      {/* Locked while the AI works, so its board update cannot overwrite edits made meanwhile. */}
+      <KanbanBoard board={board} onChange={updateBoard} onLogout={logout} locked={aiBusy} />
       {/* The backend already saved AI board updates, so only update local state. */}
-      <ChatSidebar onBoardUpdate={(next) => updateBoard(next, false)} beforeSend={() => saving.current} />
+      <ChatSidebar
+        onBoardUpdate={(next) => updateBoard(next, false)}
+        beforeSend={() => saving.current}
+        onBusyChange={setAiBusy}
+        onUnauthorized={signOut}
+      />
     </div>
   );
 }

@@ -19,7 +19,9 @@ Infrastructure
 - Next.js `cacheComponents` and `partialPrefetching` removed: static export throws "PPR cannot be enabled in export mode" with `cacheComponents` on (`next/dist/export/index.js`).
 
 Auth
-- Starlette `SessionMiddleware` with a signed httponly cookie. Secret from `SESSION_SECRET`, otherwise random per process (restart signs users out).
+- Starlette `SessionMiddleware` with a signed httponly cookie. Secret from `SESSION_SECRET` (set in `.env`), otherwise random per process (restart signs users out).
+- Any `401` from a board save or chat request returns the user to the login form. Other save failures show an error banner.
+- The container port is bound to `127.0.0.1` so the hardcoded credentials are not reachable from the network.
 
 Data
 - Columns are fixed: the five ids `backlog`, `todo`, `progress`, `review`, `done` must be present in order; only titles can change. Enforced on every write, from the UI or the AI.
@@ -31,11 +33,13 @@ Frontend
 - `App` owns the board state. Saves are queued so they reach the server in order. Drag-over changes are local only; the board is saved on drag end or cancel.
 - Drop target detection uses `pointerWithin` with a `closestCorners` fallback. `closestCorners` alone picked nearby cards over tall empty columns.
 - Chat sidebar (320px, collapsible) waits for pending saves before sending, so the AI sees the latest board. AI board updates are applied locally without re-saving (the backend already saved them).
+- The board is locked (`inert`, dimmed) while a chat request is in flight, so the AI's board cannot overwrite edits made meanwhile.
 
 AI
 - The AI-facing board uses a card list instead of a dict, because strict structured outputs do not support dict-keyed objects. `AIBoard.to_board()` converts it, rejects duplicate card ids, and validates.
 - Requests set OpenRouter `provider.require_parameters` so only providers that support structured outputs are used.
-- The model occasionally returns malformed boards (seen in about 4 of 18 calls in one batch, 0 of 72 in another). The chat route retries once; if the board is still invalid, nothing is saved and the reply says so.
+- The model occasionally returns malformed boards (seen in about 4 of 18 calls in one batch, 0 of 72 in another). The chat route retries once; if the board is still invalid, nothing is saved and the reply says so. Refusals, empty or truncated output and OpenRouter errors use the same retry; if both attempts fail the route returns 502.
+- The OpenRouter client uses a 60s timeout and no SDK retries (the route's retry is enough), so a stalled call fails within about two minutes.
 
 Testing
 - Playwright runs FastAPI (not Docker) on port 8100 with a fresh `backend/data/e2e.db`, a 1920x1080 viewport, and `workers: 1` because all tests share one user's board.
@@ -44,7 +48,7 @@ Testing
 ## Known limitations
 
 - AI edits take 10-20s (longer if retried) because the model returns the whole board.
-- Board edits made while the AI is responding are overwritten by the AI's board (last write wins).
+- Board edits from another tab while the AI is responding are overwritten by the AI's board (last write wins). The current tab is locked during the request.
 - Below about 1550px wide (with the sidebar open) the board scrolls horizontally.
 - Windows scripts (`start.ps1`, `stop.ps1`) have not been run on Windows.
 

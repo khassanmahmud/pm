@@ -16,13 +16,13 @@ Next.js 16 (App Router), React 19, Tailwind CSS 4, dnd-kit. Built as a static ex
 
 - `src/app/layout.tsx` - root layout, Geist fonts
 - `src/app/page.tsx` - renders `App`
-- `src/components/App.tsx` - auth gate and board owner: calls `/api/me`, loads `/api/board` once signed in, holds board state. `updateBoard(next, persist = true)` sets state and queues a `PUT /api/board` (saves are serialized so they arrive in order); renders the board and `ChatSidebar` side by side; handles logout
+- `src/components/App.tsx` - auth gate and board owner: calls `/api/me`, loads `/api/board` once signed in, holds board state. `updateBoard(next, persist = true)` sets state and queues a `PUT /api/board` (saves are serialized so they arrive in order; a `401` signs out to the login form, other failures show an error banner); locks the board while the AI is responding; renders the board and `ChatSidebar` side by side; handles logout
 - `src/components/LoginForm.tsx` - username/password form posting to `/api/login`, shows error on failure
 - `src/app/globals.css` - Tailwind setup and color tokens (`primary`, `secondary`, `accent`, `navy`, `muted`)
 - `src/lib/board.ts` - `Board` / `Column` / `Card` types and pure helpers: `findColumnId`, `renameColumn`, `addCard`, `updateCard`, `deleteCard`, `moveCard`
-- `src/components/KanbanBoard.tsx` - controlled by `board` / `onChange(board, persist?)`. `DndContext` and drag handlers (drag-over updates with `persist=false`; saved on drag end/cancel). Header with card count and Log out button. Collision detection is `pointerWithin` with a `closestCorners` fallback (`closestCorners` alone misses tall empty columns)
+- `src/components/KanbanBoard.tsx` - controlled by `board` / `onChange(board, persist?)`; `locked` makes it `inert` and dimmed. `DndContext` and drag handlers (drag-over updates with `persist=false`; saved on drag end/cancel). Header with card count and Log out button. Collision detection is `pointerWithin` with a `closestCorners` fallback (`closestCorners` alone misses tall empty columns)
 - `src/components/KanbanColumn.tsx` - droppable column with inline title input (updates locally while typing, saves on blur or Enter), card list, add-card form
-- `src/components/ChatSidebar.tsx` - collapsible AI chat (`w-80`, right side). History kept in component state only and sent with each `POST /api/chat`. Waits for pending board saves (`beforeSend`) before sending so the AI sees the latest board. AI board updates are applied via `updateBoard(board, false)` (the backend already saved them)
+- `src/components/ChatSidebar.tsx` - collapsible AI chat (`w-80`, right side). History kept in component state only and sent with each `POST /api/chat`. Waits for pending board saves (`beforeSend`) before sending so the AI sees the latest board. AI board updates are applied via `updateBoard(board, false)` (the backend already saved them). Reports in-flight requests via `onBusyChange` and a `401` via `onUnauthorized`
 - `src/test/sampleBoard.ts` - `initialBoard` test fixture, same as `backend/app/default_board.json`
 - `src/components/KanbanCard.tsx` - `KanbanCard` (sortable wrapper, toggles inline editor; drag attributes/listeners are removed while editing), `CardEditor`, and `CardView` (presentation, edit/delete buttons, also used in drag overlay)
 

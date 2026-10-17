@@ -96,6 +96,60 @@ describe("App", () => {
     expect(puts(fetchMock)[0].cards.c9).toBeUndefined();
   });
 
+  it("returns to the login form when a save is rejected as signed out", async () => {
+    mockApi({
+      "/api/me": signedIn,
+      "/api/board": (init) => (init?.method === "PUT" ? { status: 401 } : { status: 200, body: initialBoard }),
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete SSO integration" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("shows an error when a save fails", async () => {
+    mockApi({
+      "/api/me": signedIn,
+      "/api/board": (init) => (init?.method === "PUT" ? { status: 500 } : { status: 200, body: initialBoard }),
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete SSO integration" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be saved");
+  });
+
+  it("returns to the login form when chat is rejected as signed out", async () => {
+    mockApi({ "/api/me": signedIn, "/api/chat": () => ({ status: 401 }) });
+    render(<App />);
+    await screen.findByText("Competitor research");
+    await userEvent.type(screen.getByLabelText("Message"), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("locks the board while the AI is responding", async () => {
+    let release!: () => void;
+    const reply = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/me") return Response.json({ username: "user" });
+        if (url === "/api/chat") {
+          await reply;
+          return Response.json({ reply: "ok", board: null });
+        }
+        return Response.json(initialBoard);
+      }),
+    );
+    render(<App />);
+    const board = (await screen.findByRole("heading", { name: "Product Launch" })).closest("main")!;
+    expect(board).not.toHaveAttribute("inert");
+    await userEvent.type(screen.getByLabelText("Message"), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(board).toHaveAttribute("inert"));
+    release();
+    await screen.findByText("ok");
+    expect(board).not.toHaveAttribute("inert");
+  });
+
   it("waits for each save to finish before sending the next", async () => {
     let release!: () => void;
     const firstSave = new Promise<void>((resolve) => (release = resolve));

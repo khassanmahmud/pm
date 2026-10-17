@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
+from openai import OpenAIError
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -85,17 +86,20 @@ def put_board(board: Board, username: str = Depends(current_user)) -> Board:
 @app.post("/api/chat")
 def chat(request: ChatRequest, username: str = Depends(current_user)) -> ChatResponse:
     current = db.get_board(username)
-    # The model occasionally returns a malformed board; retry once before giving up.
+    result = None
+    # The model occasionally returns a malformed board or fails outright; retry once before giving up.
     for _ in range(2):
-        result = ai.chat(current, request.history, request.message)
-        if result.board is None:
-            return ChatResponse(reply=result.reply, board=None)
         try:
+            result = ai.chat(current, request.history, request.message)
+            if result.board is None:
+                return ChatResponse(reply=result.reply, board=None)
             board = result.board.to_board()
-        except ValueError:  # includes pydantic ValidationError
+        except (ValueError, OpenAIError):  # ValueError includes pydantic ValidationError
             continue
         db.save_board(username, board)
         return ChatResponse(reply=result.reply, board=board)
+    if result is None:
+        raise HTTPException(status_code=502, detail="The AI did not respond")
     return ChatResponse(reply=result.reply + "\n\n(The board update was invalid and was not applied.)", board=None)
 
 

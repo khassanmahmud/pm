@@ -8,7 +8,7 @@ FastAPI app, Python 3.13, managed with uv.
 - `app/models.py` - Pydantic `Board` / `Column` / `Card`; `Board` validates fixed column ids and card consistency
 - `app/db.py` - SQLite via `sqlite3`: `init_db` (run in app lifespan), `get_board` (seeds default), `save_board`. Path from `DB_PATH`, default `data/pm.db`
 - `app/default_board.json` - board seeded for new users
-- `app/ai.py` - OpenRouter via the `openai` SDK, model `openai/gpt-oss-120b`; key from `OPENROUTER_API_KEY` (client created per call). `chat(board, history, message)` sends a system prompt containing the board JSON and returns a structured `AIResponse {reply, board | null}`. The AI-facing board uses a card list (`AIBoard`) because strict structured outputs do not support dict-keyed objects; `AIBoard.to_board()` converts and validates. Requests set `provider.require_parameters` so OpenRouter only routes to providers that support structured outputs
+- `app/ai.py` - OpenRouter via the `openai` SDK, model `openai/gpt-oss-120b`; key from `OPENROUTER_API_KEY` (client created per call, 60s timeout, no SDK retries). `chat(board, history, message)` sends a system prompt containing the board JSON and returns a structured `AIResponse {reply, board | null}`, raising `ValueError` if nothing was parsed (refusal or empty content). The AI-facing board uses a card list (`AIBoard`) because strict structured outputs do not support dict-keyed objects; `AIBoard.to_board()` converts and validates. Requests set `provider.require_parameters` so OpenRouter only routes to providers that support structured outputs
 - `tests/` - pytest; `conftest.py` points `DB_PATH` at a temp file per test, provides a `client` fixture (runs lifespan), loads the root `.env`, and defines the `live` marker (skips real AI calls when no key)
 
 See `docs/DATABASE.md` for the schema.
@@ -25,7 +25,7 @@ Starlette `SessionMiddleware` (signed, httponly cookie `session`). Secret from `
 - `GET /api/me` - `{username}` or 401
 - `GET /api/board` - signed-in user's board (seeds default on first access); 401 if not signed in
 - `PUT /api/board` - body is the full board; validated (422 if invalid), saved, returned
-- `POST /api/chat` - body `{message, history: [{role: user|assistant, content}]}`; returns `{reply, board | null}`. A valid AI board is saved. If the AI returns an invalid board, the call is retried once; if still invalid, nothing is saved and the reply notes it was not applied
+- `POST /api/chat` - body `{message, history: [{role: user|assistant, content}]}`; returns `{reply, board | null}`. A valid AI board is saved. If the AI returns an invalid board or the call fails (`ValueError`, `OpenAIError`), it is retried once; if the board is still invalid, nothing is saved and the reply notes it was not applied; if both calls failed, 502
 
 ## Commands
 

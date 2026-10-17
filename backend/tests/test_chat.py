@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from openai import APIConnectionError
 
 from app import ai, main
 from app.ai import AIBoard, AIResponse, ChatMessage
@@ -24,12 +25,15 @@ def signed_in(client):
 
 @pytest.fixture
 def fake_chat(monkeypatch):
-    """Replace ai.chat. Set fake.response (or fake.responses, returned in turn) and inspect fake.calls."""
+    """Replace ai.chat. Set fake.response (or fake.responses, returned or raised in turn) and inspect fake.calls."""
     fake = SimpleNamespace(calls=[], response=AIResponse(reply="Hello", board=None), responses=None)
 
     def chat(board, history, message):
         fake.calls.append((board, history, message))
-        return fake.responses.pop(0) if fake.responses else fake.response
+        result = fake.responses.pop(0) if fake.responses else fake.response
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     monkeypatch.setattr(main.ai, "chat", chat)
     return fake
@@ -125,6 +129,19 @@ def test_chat_duplicate_card_ids_not_saved(signed_in, fake_chat):
     assert signed_in.get("/api/board").json() == DEFAULT.model_dump()
 
 
+def test_chat_retries_after_ai_error(signed_in, fake_chat):
+    fake_chat.responses = [APIConnectionError(request=None), AIResponse(reply="Hello again", board=None)]
+    assert signed_in.post("/api/chat", json={"message": "hi"}).json() == {"reply": "Hello again", "board": None}
+    assert len(fake_chat.calls) == 2
+
+
+def test_chat_ai_error_twice_returns_502(signed_in, fake_chat):
+    fake_chat.response = ValueError("no structured response")
+    response = signed_in.post("/api/chat", json={"message": "hi"})
+    assert response.status_code == 502
+    assert signed_in.get("/api/board").json() == DEFAULT.model_dump()
+
+
 def test_chat_rejects_bad_history_role(signed_in, fake_chat):
     response = signed_in.post("/api/chat", json={"message": "hi", "history": [{"role": "system", "content": "x"}]})
     assert response.status_code == 422
@@ -154,6 +171,16 @@ def test_ai_chat_builds_messages(monkeypatch):
         {"role": "assistant", "content": "Hello"},
         {"role": "user", "content": "next"},
     ]
+
+
+def test_ai_chat_raises_when_nothing_parsed(monkeypatch):
+    def parse(**kwargs):
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=None))])
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=parse)))
+    monkeypatch.setattr(ai, "client", lambda: fake_client)
+    with pytest.raises(ValueError):
+        ai.chat(DEFAULT, [], "hi")
 
 
 @live

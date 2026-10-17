@@ -24,7 +24,10 @@ Requires Docker. Create a `.env` file in the project root:
 
 ```
 OPENROUTER_API_KEY=your-key
+SESSION_SECRET=any-long-random-string
 ```
+
+`SESSION_SECRET` keeps you signed in across restarts.
 
 Then start the app:
 
@@ -33,7 +36,7 @@ Then start the app:
 .\scripts\start.ps1     # Windows
 ```
 
-Open http://localhost:8000 and sign in with `user` / `password`. Stop with `./scripts/stop.sh` or `.\scripts\stop.ps1`.
+Open http://localhost:8000 (bound to localhost only) and sign in with `user` / `password`. Stop with `./scripts/stop.sh` or `.\scripts\stop.ps1`.
 
 Data lives in the Docker volume `pm-data`; `docker volume rm pm-data` resets it.
 

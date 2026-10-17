@@ -30,9 +30,10 @@ type Props = {
   board: Board;
   onChange: (board: Board, persist?: boolean) => void;
   onLogout: () => void;
+  locked?: boolean;
 };
 
-export function KanbanBoard({ board, onChange, onLogout }: Props) {
+export function KanbanBoard({ board, onChange, onLogout, locked = false }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -72,7 +73,10 @@ export function KanbanBoard({ board, onChange, onLogout }: Props) {
   const totalCards = Object.keys(board.cards).length;
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col px-6 py-8">
+    <main
+      inert={locked}
+      className={`mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col px-6 py-8 transition-opacity ${locked ? "opacity-60" : ""}`}
+    >
       <header className="mb-8 flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Project board</p>

@@ -45,7 +45,10 @@ class AIResponse(BaseModel):
 
 
 def client() -> OpenAI:
-    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.environ["OPENROUTER_API_KEY"])
+    # Normal calls take 10-20s. The chat route retries once itself, so skip the SDK's retries.
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1", api_key=os.environ["OPENROUTER_API_KEY"], timeout=60, max_retries=0
+    )
 
 
 def ask(prompt: str) -> str:
@@ -67,4 +70,7 @@ def chat(board: Board, history: list[ChatMessage], message: str) -> AIResponse:
         # Only route to providers that support structured outputs.
         extra_body={"provider": {"require_parameters": True}},
     )
-    return response.choices[0].message.parsed
+    parsed = response.choices[0].message.parsed
+    if parsed is None:  # refusal or empty content
+        raise ValueError("no structured response")
+    return parsed

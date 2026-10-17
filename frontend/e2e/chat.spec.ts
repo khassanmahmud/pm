@@ -83,3 +83,23 @@ test("sidebar can be closed and reopened", async ({ page }) => {
   await page.getByRole("button", { name: "AI assistant" }).click();
   await expect(page.getByLabel("Message")).toBeVisible();
 });
+
+test("board cannot be edited while the AI is responding", async ({ page }) => {
+  let release!: () => void;
+  const replied = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/chat", async (route) => {
+    await replied;
+    await route.fulfill({ json: { reply: "Done.", board: null } });
+  });
+  await send(page, "Wait");
+  const card = page.getByTestId("card-c1");
+  const remove = card.getByRole("button", { name: "Delete Competitor research" });
+  await card.hover({ force: true });
+  await remove.click({ force: true });
+  await expect(card).toBeVisible();
+  release();
+  await expect(page.getByTestId("chat-messages").getByText("Done.")).toBeVisible();
+  await card.hover();
+  await remove.click();
+  await expect(card).toHaveCount(0);
+});

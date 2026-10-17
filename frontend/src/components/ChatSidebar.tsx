@@ -8,9 +8,11 @@ type Message = { role: "user" | "assistant"; content: string };
 type Props = {
   onBoardUpdate: (board: Board) => void;
   beforeSend: () => Promise<void>;
+  onBusyChange?: (busy: boolean) => void;
+  onUnauthorized?: () => void;
 };
 
-export function ChatSidebar({ onBoardUpdate, beforeSend }: Props) {
+export function ChatSidebar({ onBoardUpdate, beforeSend, onBusyChange, onUnauthorized }: Props) {
   const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -31,6 +33,7 @@ export function ChatSidebar({ onBoardUpdate, beforeSend }: Props) {
     setInput("");
     setError("");
     setLoading(true);
+    onBusyChange?.(true);
     // Make sure the server has the latest board before the AI reads it.
     await beforeSend();
     const response = await fetch("/api/chat", {
@@ -39,6 +42,8 @@ export function ChatSidebar({ onBoardUpdate, beforeSend }: Props) {
       body: JSON.stringify({ message, history }),
     }).catch(() => null);
     setLoading(false);
+    onBusyChange?.(false);
+    if (response?.status === 401) return onUnauthorized?.();
     if (!response?.ok) {
       setError("The assistant could not respond. Please try again.");
       return;
