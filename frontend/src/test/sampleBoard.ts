@@ -1,0 +1,24 @@
+import type { Board } from "@/lib/board";
+
+// Same as backend/app/default_board.json
+export const initialBoard: Board = {
+  columns: [
+    { id: "backlog", title: "Backlog", cardIds: ["c1", "c2", "c3"] },
+    { id: "todo", title: "To Do", cardIds: ["c4", "c5"] },
+    { id: "progress", title: "In Progress", cardIds: ["c6", "c7"] },
+    { id: "review", title: "Review", cardIds: ["c8"] },
+    { id: "done", title: "Done", cardIds: ["c9", "c10"] },
+  ],
+  cards: {
+    c1: { id: "c1", title: "Competitor research", details: "Summarize pricing and positioning of the top five competitors." },
+    c2: { id: "c2", title: "Customer interviews", details: "Schedule eight interviews with existing customers for Q4 feedback." },
+    c3: { id: "c3", title: "Mobile app spike", details: "Evaluate React Native versus a responsive web approach." },
+    c4: { id: "c4", title: "Onboarding flow", details: "Design a three-step onboarding with progress indicator." },
+    c5: { id: "c5", title: "Billing settings page", details: "Allow admins to update payment method and download invoices." },
+    c6: { id: "c6", title: "Dashboard redesign", details: "Implement the new layout with key metrics above the fold." },
+    c7: { id: "c7", title: "API rate limiting", details: "Add per-token limits and return clear 429 responses." },
+    c8: { id: "c8", title: "Email notifications", details: "Review templates for weekly digest and mention alerts." },
+    c9: { id: "c9", title: "SSO integration", details: "Google and Microsoft sign-in shipped to all workspaces." },
+    c10: { id: "c10", title: "Brand refresh", details: "New logo, typography, and color palette rolled out." },
+  },
+};

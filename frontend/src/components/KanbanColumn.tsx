@@ -1,71 +1,117 @@
-import clsx from "clsx";
+"use client";
+
+import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Card, Column } from "@/lib/kanban";
-import { KanbanCard } from "@/components/KanbanCard";
-import { NewCardForm } from "@/components/NewCardForm";
+import type { Card, Column } from "@/lib/board";
+import { KanbanCard } from "./KanbanCard";
 
-type KanbanColumnProps = {
+type Props = {
   column: Column;
   cards: Card[];
-  onRename: (columnId: string, title: string) => void;
-  onAddCard: (columnId: string, title: string, details: string) => void;
-  onDeleteCard: (columnId: string, cardId: string) => void;
+  onRename: (title: string) => void;
+  onRenameDone: () => void;
+  onAdd: (title: string, details: string) => void;
+  onEdit: (cardId: string, title: string, details: string) => void;
+  onDelete: (cardId: string) => void;
 };
 
-export const KanbanColumn = ({
-  column,
-  cards,
-  onRename,
-  onAddCard,
-  onDeleteCard,
-}: KanbanColumnProps) => {
+export function KanbanColumn({ column, cards, onRename, onRenameDone, onAdd, onEdit, onDelete }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    onAdd(title.trim(), details.trim());
+    setTitle("");
+    setDetails("");
+    setAdding(false);
+  }
 
   return (
     <section
       ref={setNodeRef}
-      className={clsx(
-        "flex min-h-[520px] flex-col rounded-3xl border border-[var(--stroke)] bg-[var(--surface-strong)] p-4 shadow-[var(--shadow)] transition",
-        isOver && "ring-2 ring-[var(--accent-yellow)]"
-      )}
       data-testid={`column-${column.id}`}
+      className={`flex min-w-72 flex-1 flex-col rounded-2xl border bg-white/60 backdrop-blur transition-colors ${
+        isOver ? "border-primary/50 bg-primary/5" : "border-slate-200/70"
+      }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="w-full">
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
-            </span>
-          </div>
-          <input
-            value={column.title}
-            onChange={(event) => onRename(column.id, event.target.value)}
-            className="mt-3 w-full bg-transparent font-display text-lg font-semibold text-[var(--navy-dark)] outline-none"
-            aria-label="Column title"
-          />
-        </div>
-      </div>
-      <div className="mt-4 flex flex-1 flex-col gap-3">
-        <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
+      <header className="flex items-center gap-2 border-b border-slate-200/70 px-4 pb-3 pt-4">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+        <input
+          value={column.title}
+          onChange={(e) => onRename(e.target.value)}
+          onBlur={onRenameDone}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          aria-label="Column title"
+          className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 text-sm font-semibold uppercase tracking-wide text-navy outline-none transition hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-primary/40"
+        />
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          {cards.length}
+        </span>
+      </header>
+
+      <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
+        <ul className="flex min-h-24 flex-1 flex-col gap-3 p-3">
           {cards.map((card) => (
             <KanbanCard
               key={card.id}
               card={card}
-              onDelete={(cardId) => onDeleteCard(column.id, cardId)}
+              onEdit={(title, details) => onEdit(card.id, title, details)}
+              onDelete={() => onDelete(card.id)}
             />
           ))}
-        </SortableContext>
-        {cards.length === 0 && (
-          <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--stroke)] px-3 py-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-            Drop a card here
-          </div>
+        </ul>
+      </SortableContext>
+
+      <div className="p-3 pt-0">
+        {adding ? (
+          <form onSubmit={submit} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <input
+              autoFocus
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Card title"
+              aria-label="Card title"
+              className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+            <textarea
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder="Details"
+              aria-label="Card details"
+              rows={3}
+              className="w-full resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAdding(false)}
+                className="rounded-md px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-navy"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-secondary/90"
+              >
+                Add card
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-white hover:text-primary"
+          >
+            <span aria-hidden className="text-base leading-none">+</span> Add a card
+          </button>
         )}
       </div>
-      <NewCardForm
-        onAdd={(title, details) => onAddCard(column.id, title, details)}
-      />
     </section>
   );
-};
+}
