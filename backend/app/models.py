@@ -1,12 +1,28 @@
-from pydantic import BaseModel, model_validator
+from datetime import date
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 COLUMN_IDS = ["backlog", "todo", "progress", "review", "done"]
+
+Priority = Literal["low", "medium", "high"]
 
 
 class Card(BaseModel):
     id: str
     title: str
     details: str
+    priority: Priority | None = None
+    # ISO date (YYYY-MM-DD). A plain string keeps "format" out of the AI's JSON schema.
+    dueDate: str | None = None
+    labels: list[str] = Field(default_factory=list)
+
+    @field_validator("dueDate")
+    @classmethod
+    def check_due_date(cls, value: str | None) -> str | None:
+        if value is not None:
+            date.fromisoformat(value)
+        return value
 
 
 class Column(BaseModel):
@@ -32,3 +48,19 @@ class Board(BaseModel):
             if card.id != key:
                 raise ValueError(f"card key {key} does not match id {card.id}")
         return self
+
+
+EMPTY_BOARD = Board(
+    columns=[
+        Column(id=id, title=title, cardIds=[])
+        for id, title in zip(COLUMN_IDS, ["Backlog", "To Do", "In Progress", "Review", "Done"])
+    ],
+    cards={},
+)
+
+
+class BoardSummary(BaseModel):
+    id: int
+    name: str
+    cardCount: int
+    updatedAt: str

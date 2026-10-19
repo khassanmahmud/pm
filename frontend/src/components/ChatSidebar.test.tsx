@@ -6,11 +6,15 @@ import { ChatSidebar } from "./ChatSidebar";
 
 type ChatBody = { message: string; history: { role: string; content: string }[] };
 
+const urls: string[] = [];
+
 function mockChat(reply: (body: ChatBody) => { status?: number; reply?: string; board?: unknown }) {
   const bodies: ChatBody[] = [];
+  urls.length = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (_url: string, init: RequestInit) => {
+    vi.fn(async (url: string, init: RequestInit) => {
+      urls.push(url);
       const body = JSON.parse(init.body as string);
       bodies.push(body);
       const r = reply(body);
@@ -22,7 +26,7 @@ function mockChat(reply: (body: ChatBody) => { status?: number; reply?: string; 
 
 function renderSidebar(beforeSend = () => Promise.resolve()) {
   const onBoardUpdate = vi.fn();
-  render(<ChatSidebar onBoardUpdate={onBoardUpdate} beforeSend={beforeSend} />);
+  render(<ChatSidebar boardId={7} onBoardUpdate={onBoardUpdate} beforeSend={beforeSend} />);
   return onBoardUpdate;
 }
 
@@ -38,7 +42,7 @@ afterEach(() => {
 describe("ChatSidebar", () => {
   it("shows a hint before any messages", () => {
     renderSidebar();
-    expect(screen.getByText(/ask me to add, edit or move cards/i)).toBeInTheDocument();
+    expect(screen.getByText(/ask me to add, edit, move/i)).toBeInTheDocument();
   });
 
   it("sends a message and shows the reply", async () => {
@@ -50,6 +54,14 @@ describe("ChatSidebar", () => {
     expect(screen.getByText("There are 10 cards.")).toHaveAttribute("data-role", "assistant");
     expect(bodies).toEqual([{ message: "How many cards?", history: [] }]);
     expect(screen.getByLabelText("Message")).toHaveValue("");
+  });
+
+  it("posts to the selected board's chat endpoint", async () => {
+    mockChat(() => ({ reply: "Hi" }));
+    renderSidebar();
+    await send("Hello");
+    await screen.findByText("Hi");
+    expect(urls).toEqual(["/api/boards/7/chat"]);
   });
 
   it("sends the conversation history with each message", async () => {

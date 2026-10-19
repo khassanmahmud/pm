@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newCard } from "../src/lib/board";
 import { initialBoard } from "../src/test/sampleBoard";
+import { boardList, newUser } from "./helpers";
 
 async function mockChat(page: Page, reply: string, board: unknown = null) {
   const requests: unknown[] = [];
-  await page.route("**/api/chat", async (route) => {
+  await page.route("**/api/boards/*/chat", async (route) => {
     requests.push(route.request().postDataJSON());
     await route.fulfill({ json: { reply, board } });
   });
@@ -16,15 +18,12 @@ async function send(page: Page, text: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.request.post("/api/login", { data: { username: "user", password: "password" } });
-  await page.request.put("/api/board", { data: initialBoard });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Product Launch" })).toBeVisible();
+  await newUser(page);
 });
 
 test("sidebar is shown next to the board", async ({ page }) => {
   await expect(page.getByRole("complementary", { name: "AI assistant" })).toBeVisible();
-  await expect(page.getByText(/ask me to add, edit or move cards/i)).toBeVisible();
+  await expect(page.getByText(/ask me to add, edit, move/i)).toBeVisible();
 });
 
 test("chats and shows the reply", async ({ page }) => {
@@ -53,7 +52,7 @@ test("sends history on follow-up messages", async ({ page }) => {
 
 test("board refreshes when the AI updates it", async ({ page }) => {
   const board = structuredClone(initialBoard);
-  board.cards.ai1 = { id: "ai1", title: "Created by AI", details: "From the assistant" };
+  board.cards.ai1 = newCard("ai1", { title: "Created by AI", details: "From the assistant", priority: "high" });
   board.columns[1].cardIds.push("ai1");
   board.columns[0].cardIds = board.columns[0].cardIds.filter((id) => id !== "c1");
   board.columns[4].cardIds.unshift("c1");
@@ -62,6 +61,27 @@ test("board refreshes when the AI updates it", async ({ page }) => {
   await expect(page.getByTestId("column-todo").getByText("Created by AI")).toBeVisible();
   await expect(page.getByTestId("column-done").getByTestId("card-c1")).toBeVisible();
   await expect(page.getByText("11 cards across 5 columns")).toBeVisible();
+  await expect(page.getByTestId("card-ai1").getByText("high", { exact: true })).toBeVisible();
+  await expect(boardList(page).getByRole("button", { name: /Product Launch\s*11/ })).toBeVisible();
+});
+
+test("chat goes to the selected board and starts fresh per board", async ({ page }) => {
+  const requests: string[] = [];
+  await page.route("**/api/boards/*/chat", async (route) => {
+    requests.push(new URL(route.request().url()).pathname);
+    await route.fulfill({ json: { reply: "Noted.", board: null } });
+  });
+  await send(page, "On the first board");
+  await expect(page.getByTestId("chat-messages").getByText("Noted.")).toBeVisible();
+  await boardList(page).getByRole("button", { name: /new board/i }).click();
+  await boardList(page).getByLabel("Board name").fill("Second");
+  await boardList(page).getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name: "Second" })).toBeVisible();
+  await expect(page.getByTestId("chat-messages").getByText("On the first board")).toHaveCount(0);
+  await send(page, "On the second board");
+  await expect(page.getByTestId("chat-messages").getByText("Noted.")).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).not.toEqual(requests[1]);
 });
 
 test("board is unchanged when the AI returns no update", async ({ page }) => {
@@ -72,7 +92,7 @@ test("board is unchanged when the AI returns no update", async ({ page }) => {
 });
 
 test("shows an error when the assistant fails", async ({ page }) => {
-  await page.route("**/api/chat", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.route("**/api/boards/*/chat", (route) => route.fulfill({ status: 500, body: "" }));
   await send(page, "Hello");
   await expect(page.getByText(/could not respond/i)).toBeVisible();
 });
@@ -87,7 +107,7 @@ test("sidebar can be closed and reopened", async ({ page }) => {
 test("board cannot be edited while the AI is responding", async ({ page }) => {
   let release!: () => void;
   const replied = new Promise<void>((resolve) => (release = resolve));
-  await page.route("**/api/chat", async (route) => {
+  await page.route("**/api/boards/*/chat", async (route) => {
     await replied;
     await route.fulfill({ json: { reply: "Done.", board: null } });
   });

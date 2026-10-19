@@ -11,5 +11,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Drag and drop handlers need real layout, so they are covered by the Playwright tests instead.
+    coverage: { include: ["src/components/**", "src/lib/**"], exclude: ["**/*.test.*"] },
   },
 });

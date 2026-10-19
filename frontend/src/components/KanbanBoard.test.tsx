@@ -6,24 +6,32 @@ import type { Board } from "@/lib/board";
 import { initialBoard } from "@/test/sampleBoard";
 import { KanbanBoard } from "./KanbanBoard";
 
-function renderBoard() {
+const handlers = { onRename: vi.fn(), onDelete: vi.fn() };
+
+function renderBoard(start: Board = initialBoard) {
   const onChange = vi.fn();
+  handlers.onRename = vi.fn();
+  handlers.onDelete = vi.fn();
   function Harness() {
-    const [board, setBoard] = useState(initialBoard);
+    const [board, setBoard] = useState(start);
     return (
       <KanbanBoard
+        name="Product Launch"
         board={board}
         onChange={(next: Board, persist?: boolean) => {
           setBoard(next);
           onChange(next, persist);
         }}
-        onLogout={() => {}}
+        {...handlers}
       />
     );
   }
   render(<Harness />);
   return onChange;
 }
+
+const columnCards = (id: string) =>
+  [...screen.getByTestId(`column-${id}`).querySelectorAll("li")].map((li) => li.dataset.testid);
 
 const saves = (onChange: ReturnType<typeof vi.fn>) => onChange.mock.calls.filter(([, persist]) => persist !== false);
 
@@ -144,5 +152,117 @@ describe("KanbanBoard", () => {
     expect(input).not.toHaveFocus();
     expect(saves(onChange)).toHaveLength(1);
     expect(saves(onChange)[0][0].columns[3].title).toBe("QA");
+  });
+  it("shows the board name and stats", () => {
+    renderBoard();
+    expect(screen.getByRole("heading", { name: "Product Launch" })).toBeInTheDocument();
+    expect(screen.getByText(/20% done/)).toBeInTheDocument();
+  });
+
+  it("edits priority, due date and labels", async () => {
+    const onChange = renderBoard();
+    await userEvent.click(screen.getByRole("button", { name: "Edit Mobile app spike" }));
+    await userEvent.selectOptions(screen.getByLabelText("Priority"), "high");
+    await userEvent.type(screen.getByLabelText("Due date"), "2030-01-15");
+    await userEvent.clear(screen.getByLabelText("Labels"));
+    await userEvent.type(screen.getByLabelText("Labels"), "mobile, spike, mobile");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(saves(onChange)[0][0].cards.c3).toMatchObject({
+      priority: "high",
+      dueDate: "2030-01-15",
+      labels: ["mobile", "spike"],
+    });
+    const card = within(screen.getByTestId("card-c3"));
+    expect(card.getByText("high")).toBeInTheDocument();
+    expect(card.getByText("Due Jan 15")).toBeInTheDocument();
+    expect(card.getByText("spike")).toBeInTheDocument();
+  });
+
+  it("clears priority and due date", async () => {
+    const onChange = renderBoard();
+    await userEvent.click(screen.getByRole("button", { name: "Edit Onboarding flow" }));
+    await userEvent.selectOptions(screen.getByLabelText("Priority"), "");
+    await userEvent.clear(screen.getByLabelText("Due date"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(saves(onChange)[0][0].cards.c4).toMatchObject({ priority: null, dueDate: null });
+  });
+
+  it("marks overdue cards outside the done column", () => {
+    const board = structuredClone(initialBoard);
+    for (const card of Object.values(board.cards)) card.dueDate = null;
+    board.cards.c1.dueDate = "2000-01-01";
+    board.cards.c9.dueDate = "2000-01-01";
+    renderBoard(board);
+    expect(within(screen.getByTestId("card-c1")).getByText("Overdue Jan 1")).toBeInTheDocument();
+    expect(within(screen.getByTestId("card-c9")).getByText("Due Jan 1")).toBeInTheDocument();
+    expect(screen.getByText(/1 overdue/)).toBeInTheDocument();
+  });
+
+  it("filters cards by search text", async () => {
+    renderBoard();
+    await userEvent.type(screen.getByLabelText("Search cards"), "design");
+    // Matches labels (c4, c5, c10) and details text ("Design a three-step...").
+    expect(columnCards("todo")).toEqual(["card-c4", "card-c5"]);
+    expect(columnCards("backlog")).toEqual([]);
+    expect(columnCards("done")).toEqual(["card-c10"]);
+    expect(within(screen.getByTestId("column-done")).getByText("1/2")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(columnCards("backlog")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("filters cards by priority", async () => {
+    renderBoard();
+    await userEvent.selectOptions(screen.getByLabelText("Filter by priority"), "high");
+    expect(columnCards("backlog")).toEqual(["card-c2"]);
+    expect(columnCards("todo")).toEqual(["card-c4"]);
+    expect(columnCards("progress")).toEqual(["card-c6"]);
+    expect(columnCards("done")).toEqual([]);
+  });
+
+  it("does not change the board when filtering", async () => {
+    const onChange = renderBoard();
+    await userEvent.type(screen.getByLabelText("Search cards"), "zzz");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText("10 cards across 5 columns")).toBeInTheDocument();
+  });
+
+  it("renames the board", async () => {
+    renderBoard();
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = screen.getByLabelText("Board name");
+    expect(input).toHaveValue("Product Launch");
+    await userEvent.clear(input);
+    await userEvent.type(input, "  Launch v2 {Enter}");
+    expect(handlers.onRename).toHaveBeenCalledWith("Launch v2");
+    expect(screen.queryByLabelText("Board name")).not.toBeInTheDocument();
+  });
+
+  it("does not rename when the name is unchanged or cancelled", async () => {
+    renderBoard();
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await userEvent.type(screen.getByLabelText("Board name"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(handlers.onRename).not.toHaveBeenCalled();
+  });
+
+  it("asks for confirmation before deleting the board", async () => {
+    renderBoard();
+    await userEvent.click(screen.getByRole("button", { name: "Delete board" }));
+    await userEvent.click(screen.getByRole("button", { name: "Keep" }));
+    expect(handlers.onDelete).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Delete board" }));
+    expect(screen.getByText("Delete this board?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(handlers.onDelete).toHaveBeenCalledOnce();
+  });
+
+  it("is inert while locked", () => {
+    render(
+      <KanbanBoard name="B" board={initialBoard} onChange={() => {}} onRename={() => {}} onDelete={() => {}} locked />,
+    );
+    expect(screen.getByRole("main")).toHaveAttribute("inert");
   });
 });

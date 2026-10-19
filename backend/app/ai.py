@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from typing import Literal
 
 from openai import OpenAI
@@ -14,6 +15,8 @@ Answer the user's questions about the board and make changes when asked.
 The board has five fixed columns (ids: backlog, todo, progress, review, done). Column titles may be renamed, \
 but never add, remove or reorder columns or change their ids.
 Each card belongs to exactly one column; a column's cardIds order is the card order.
+Cards have a title, details, priority ("low", "medium", "high" or null), dueDate ("YYYY-MM-DD" or null) \
+and labels (a list of short tags, possibly empty). Today is {today}.
 
 If the user asks for a change, set "board" to the complete updated board, including every unchanged card. \
 New cards need a unique id not already used on the board. If no change is needed, set "board" to null.
@@ -59,7 +62,7 @@ def ask(prompt: str) -> str:
 def chat(board: Board, history: list[ChatMessage], message: str) -> AIResponse:
     ai_board = AIBoard(columns=board.columns, cards=list(board.cards.values()))
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(board=ai_board.model_dump_json())},
+        {"role": "system", "content": SYSTEM_PROMPT.format(board=ai_board.model_dump_json(), today=date.today().isoformat())},
         *(m.model_dump() for m in history),
         {"role": "user", "content": message},
     ]

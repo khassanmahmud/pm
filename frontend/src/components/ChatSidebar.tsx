@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
 import type { Board } from "@/lib/board";
 
 type Message = { role: "user" | "assistant"; content: string };
 
 type Props = {
+  boardId: number;
   onBoardUpdate: (board: Board) => void;
   beforeSend: () => Promise<void>;
   onBusyChange?: (busy: boolean) => void;
   onUnauthorized?: () => void;
 };
 
-export function ChatSidebar({ onBoardUpdate, beforeSend, onBusyChange, onUnauthorized }: Props) {
+export function ChatSidebar({ boardId, onBoardUpdate, beforeSend, onBusyChange, onUnauthorized }: Props) {
   const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -36,11 +38,7 @@ export function ChatSidebar({ onBoardUpdate, beforeSend, onBusyChange, onUnautho
     onBusyChange?.(true);
     // Make sure the server has the latest board before the AI reads it.
     await beforeSend();
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history }),
-    }).catch(() => null);
+    const response = await api(`/api/boards/${boardId}/chat`, "POST", { message, history }).catch(() => null);
     setLoading(false);
     onBusyChange?.(false);
     if (response?.status === 401) return onUnauthorized?.();
@@ -90,7 +88,7 @@ export function ChatSidebar({ onBoardUpdate, beforeSend, onBusyChange, onUnautho
       <div ref={list} className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4" data-testid="chat-messages">
         {messages.length === 0 && (
           <p className="text-sm text-muted">
-            Ask about your board, or ask me to add, edit or move cards.
+            Ask about this board, or ask me to add, edit, move or prioritize cards.
           </p>
         )}
         {messages.map((m, i) => (

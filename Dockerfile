@@ -3,6 +3,8 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend ./
+# The test fixture imports the default board; next build type-checks it.
+COPY backend/app/default_board.json /app/backend/app/default_board.json
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim

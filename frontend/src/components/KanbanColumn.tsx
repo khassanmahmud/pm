@@ -3,20 +3,22 @@
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Card, Column } from "@/lib/board";
+import type { Card, CardFields, Column } from "@/lib/board";
 import { KanbanCard } from "./KanbanCard";
 
 type Props = {
   column: Column;
+  // Cards that match the current filter, in column order.
   cards: Card[];
+  overdue: Set<string>;
   onRename: (title: string) => void;
   onRenameDone: () => void;
   onAdd: (title: string, details: string) => void;
-  onEdit: (cardId: string, title: string, details: string) => void;
+  onEdit: (cardId: string, fields: CardFields) => void;
   onDelete: (cardId: string) => void;
 };
 
-export function KanbanColumn({ column, cards, onRename, onRenameDone, onAdd, onEdit, onDelete }: Props) {
+export function KanbanColumn({ column, cards, overdue, onRename, onRenameDone, onAdd, onEdit, onDelete }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -34,7 +36,7 @@ export function KanbanColumn({ column, cards, onRename, onRenameDone, onAdd, onE
     <section
       ref={setNodeRef}
       data-testid={`column-${column.id}`}
-      className={`flex min-w-72 flex-1 flex-col rounded-2xl border bg-white/60 backdrop-blur transition-colors ${
+      className={`flex min-w-60 flex-1 flex-col rounded-2xl border bg-white/60 backdrop-blur transition-colors ${
         isOver ? "border-primary/50 bg-primary/5" : "border-slate-200/70"
       }`}
     >
@@ -49,17 +51,18 @@ export function KanbanColumn({ column, cards, onRename, onRenameDone, onAdd, onE
           className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 text-sm font-semibold uppercase tracking-wide text-navy outline-none transition hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-primary/40"
         />
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-          {cards.length}
+          {cards.length === column.cardIds.length ? cards.length : `${cards.length}/${column.cardIds.length}`}
         </span>
       </header>
 
-      <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
         <ul className="flex min-h-24 flex-1 flex-col gap-3 p-3">
           {cards.map((card) => (
             <KanbanCard
               key={card.id}
               card={card}
-              onEdit={(title, details) => onEdit(card.id, title, details)}
+              overdue={overdue.has(card.id)}
+              onEdit={(fields) => onEdit(card.id, fields)}
               onDelete={() => onDelete(card.id)}
             />
           ))}

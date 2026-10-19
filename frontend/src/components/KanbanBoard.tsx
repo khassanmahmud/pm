@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   closestCorners,
   pointerWithin,
@@ -16,7 +16,22 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { addCard, deleteCard, findColumnId, moveCard, renameColumn, updateCard, type Board } from "@/lib/board";
+import {
+  addCard,
+  deleteCard,
+  DONE_COLUMN,
+  findColumnId,
+  matchesFilter,
+  moveCard,
+  newCard,
+  overdueCardIds,
+  PRIORITIES,
+  renameColumn,
+  updateCard,
+  type Board,
+  type Filter,
+  type Priority,
+} from "@/lib/board";
 import { KanbanColumn } from "./KanbanColumn";
 import { CardView } from "./KanbanCard";
 
@@ -27,14 +42,25 @@ const collisionDetection: CollisionDetection = (args) => {
 };
 
 type Props = {
+  name: string;
   board: Board;
   onChange: (board: Board, persist?: boolean) => void;
-  onLogout: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
   locked?: boolean;
 };
 
-export function KanbanBoard({ board, onChange, onLogout, locked = false }: Props) {
+const button =
+  "rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:border-primary hover:text-primary";
+const input =
+  "rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20";
+
+export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked = false }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>({ query: "", priority: "" });
+  const [renaming, setRenaming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const overdue = useMemo(() => new Set(overdueCardIds(board)), [board]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -42,7 +68,8 @@ export function KanbanBoard({ board, onChange, onLogout, locked = false }: Props
 
   function targetIndex(overId: string, columnId: string) {
     const cardIds = board.columns.find((c) => c.id === columnId)!.cardIds;
-    return overId === columnId ? cardIds.length : cardIds.indexOf(overId);
+    const index = cardIds.indexOf(overId);
+    return index === -1 ? cardIds.length : index;
   }
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -71,31 +98,110 @@ export function KanbanBoard({ board, onChange, onLogout, locked = false }: Props
   }
 
   const totalCards = Object.keys(board.cards).length;
+  const doneCards = board.columns.find((c) => c.id === DONE_COLUMN)!.cardIds.length;
+  const filtering = filter.query.trim() !== "" || filter.priority !== "";
+
+  function submitRename(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const next = new FormData(e.currentTarget).get("name")!.toString().trim();
+    if (next && next !== name) onRename(next);
+    setRenaming(false);
+  }
 
   return (
     <main
       inert={locked}
-      className={`mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col px-6 py-8 transition-opacity ${locked ? "opacity-60" : ""}`}
+      className={`mx-auto flex w-full min-w-0 max-w-[1600px] flex-1 flex-col px-6 py-6 transition-opacity ${locked ? "opacity-60" : ""}`}
     >
-      <header className="mb-8 flex items-end justify-between gap-4">
-        <div>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Project board</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Product Launch</h1>
+          {renaming ? (
+            <form onSubmit={submitRename} className="mt-1 flex gap-2">
+              <input
+                name="name"
+                autoFocus
+                required
+                maxLength={80}
+                defaultValue={name}
+                aria-label="Board name"
+                className={`${input} text-lg font-bold`}
+              />
+              <button type="submit" className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white">
+                Save
+              </button>
+              <button type="button" onClick={() => setRenaming(false)} className={button}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <h1 className="mt-1 truncate text-3xl font-bold tracking-tight text-navy">{name}</h1>
+          )}
           <div className="mt-3 h-1 w-16 rounded-full bg-accent" />
         </div>
-        <div className="flex items-center gap-4">
-          <p className="hidden text-sm text-muted sm:block">
-            {totalCards} cards across {board.columns.length} columns
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted">
+            <span>
+              {totalCards} cards across {board.columns.length} columns
+            </span>
+            {totalCards > 0 && <> &middot; {Math.round((doneCards / totalCards) * 100)}% done</>}
+            {overdue.size > 0 && <span className="font-medium text-red-600"> &middot; {overdue.size} overdue</span>}
           </p>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:border-primary hover:text-primary"
-          >
-            Log out
-          </button>
+          {!renaming && (
+            <button type="button" onClick={() => setRenaming(true)} className={button}>
+              Rename
+            </button>
+          )}
+          {confirmingDelete ? (
+            <span className="flex items-center gap-2 text-sm text-navy">
+              Delete this board?
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700"
+              >
+                Delete
+              </button>
+              <button type="button" onClick={() => setConfirmingDelete(false)} className={button}>
+                Keep
+              </button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => setConfirmingDelete(true)} className={`${button} hover:border-red-300 hover:text-red-600`}>
+              Delete board
+            </button>
+          )}
         </div>
       </header>
+
+      <div role="search" className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={filter.query}
+          onChange={(e) => setFilter({ ...filter, query: e.target.value })}
+          placeholder="Search cards"
+          aria-label="Search cards"
+          className={`${input} w-64`}
+        />
+        <select
+          value={filter.priority}
+          onChange={(e) => setFilter({ ...filter, priority: e.target.value as Priority | "" })}
+          aria-label="Filter by priority"
+          className={input}
+        >
+          <option value="">All priorities</option>
+          {PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {p[0].toUpperCase() + p.slice(1)} priority
+            </option>
+          ))}
+        </select>
+        {filtering && (
+          <button type="button" onClick={() => setFilter({ query: "", priority: "" })} className={button}>
+            Clear filters
+          </button>
+        )}
+      </div>
 
       <DndContext
         id="kanban"
@@ -111,18 +217,19 @@ export function KanbanBoard({ board, onChange, onLogout, locked = false }: Props
             <KanbanColumn
               key={column.id}
               column={column}
-              cards={column.cardIds.map((id) => board.cards[id])}
+              cards={column.cardIds.map((id) => board.cards[id]).filter((card) => matchesFilter(card, filter))}
+              overdue={overdue}
               onRename={(title) => onChange(renameColumn(board, column.id, title), false)}
               onRenameDone={() => onChange(board)}
               onAdd={(title, details) =>
-                onChange(addCard(board, column.id, { id: crypto.randomUUID(), title, details }))
+                onChange(addCard(board, column.id, newCard(crypto.randomUUID(), { title, details })))
               }
-              onEdit={(cardId, title, details) => onChange(updateCard(board, cardId, title, details))}
+              onEdit={(cardId, fields) => onChange(updateCard(board, cardId, fields))}
               onDelete={(cardId) => onChange(deleteCard(board, cardId))}
             />
           ))}
         </div>
-        <DragOverlay>{activeId && <CardView card={board.cards[activeId]} overlay />}</DragOverlay>
+        <DragOverlay>{activeId && <CardView card={board.cards[activeId]} overdue={overdue.has(activeId)} overlay />}</DragOverlay>
       </DndContext>
     </main>
   );

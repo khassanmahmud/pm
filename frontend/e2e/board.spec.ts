@@ -1,8 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { initialBoard } from "../src/test/sampleBoard";
-
-const saved = (page: Page) =>
-  page.waitForResponse((r) => r.url().endsWith("/api/board") && r.request().method() === "PUT" && r.ok());
+import { newUser, PASSWORD, saved, signIn } from "./helpers";
 
 async function reload(page: Page) {
   await page.reload();
@@ -19,14 +16,13 @@ async function drag(page: Page, source: Locator, target: Locator) {
   await page.mouse.up();
 }
 
+let username: string;
+
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (msg) => msg.type() === "error" && errors.push(msg.text()));
   page.on("pageerror", (err) => errors.push(err.message));
-  await page.request.post("/api/login", { data: { username: "user", password: "password" } });
-  await page.request.put("/api/board", { data: initialBoard });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Product Launch" })).toBeVisible();
+  username = await newUser(page);
   expect(errors).toEqual([]);
 });
 
@@ -127,6 +123,55 @@ test("serves the API alongside the app", async ({ request }) => {
   expect(await response.json()).toEqual({ status: "ok" });
 });
 
+test("edits priority, due date and labels", async ({ page }) => {
+  const card = page.getByTestId("card-c3");
+  await card.hover();
+  await card.getByRole("button", { name: "Edit Mobile app spike" }).click();
+  await card.getByLabel("Priority").selectOption("high");
+  await card.getByLabel("Due date").fill("2030-03-04");
+  await card.getByLabel("Labels").fill("mobile, research");
+  const save = saved(page);
+  await card.getByRole("button", { name: "Save" }).click();
+  await save;
+  await expect(card.getByText("high", { exact: true })).toBeVisible();
+  await expect(card.getByText("Due Mar 4")).toBeVisible();
+  await expect(card.getByText("mobile", { exact: true })).toBeVisible();
+  await reload(page);
+  await expect(page.getByTestId("card-c3").getByText("Due Mar 4")).toBeVisible();
+  await expect(page.getByTestId("card-c3").getByText("research", { exact: true })).toBeVisible();
+});
+
+test("flags overdue cards", async ({ page }) => {
+  const card = page.getByTestId("card-c1");
+  await card.hover();
+  await card.getByRole("button", { name: "Edit Competitor research" }).click();
+  await card.getByLabel("Due date").fill("2001-02-03");
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByText("Overdue Feb 3")).toBeVisible();
+  await expect(page.getByText(/\d+ overdue/)).toBeVisible();
+});
+
+test("searches and filters cards", async ({ page }) => {
+  await page.getByLabel("Search cards").fill("research");
+  await expect(page.getByTestId("column-backlog").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("column-todo").locator("li")).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByLabel("Filter by priority").selectOption("high");
+  await expect(page.locator("li[data-testid^=card-]")).toHaveCount(3);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.locator("li[data-testid^=card-]")).toHaveCount(10);
+});
+
+test("drags a card while a filter is active", async ({ page }) => {
+  await page.getByLabel("Filter by priority").selectOption("high");
+  const save = saved(page);
+  await drag(page, page.getByTestId("card-c2"), page.getByTestId("column-done"));
+  await save;
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.getByTestId("column-done").getByTestId("card-c2")).toBeVisible();
+  await expect(page.getByTestId("column-backlog").locator("li")).toHaveCount(2);
+});
+
 test.describe("persistence", () => {
   test("added card survives reload", async ({ page }) => {
     const column = page.getByTestId("column-progress");
@@ -211,9 +256,7 @@ test.describe("persistence", () => {
     await card.getByRole("button", { name: "Delete Competitor research" }).click();
     await save;
     await page.getByRole("button", { name: "Log out" }).click();
-    await page.getByLabel("Username").fill("user");
-    await page.getByLabel("Password").fill("password");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page, username, PASSWORD);
     await expect(page.getByText("9 cards across 5 columns")).toBeVisible();
   });
 });

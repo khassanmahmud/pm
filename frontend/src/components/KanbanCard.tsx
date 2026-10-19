@@ -3,14 +3,24 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Card } from "@/lib/board";
+import { formatDueDate, parseLabels, PRIORITIES, type Card, type CardFields, type Priority } from "@/lib/board";
 
-type ViewProps = { card: Card; onEdit?: () => void; onDelete?: () => void; overlay?: boolean };
+type ViewProps = { card: Card; overdue?: boolean; onEdit?: () => void; onDelete?: () => void; overlay?: boolean };
 
 const iconButton =
   "rounded-md p-1.5 text-muted opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100";
 
-export function CardView({ card, onEdit, onDelete, overlay }: ViewProps) {
+const priorityStyle: Record<Priority, string> = {
+  high: "bg-red-50 text-red-700 ring-red-200",
+  medium: "bg-accent/15 text-amber-800 ring-accent/40",
+  low: "bg-slate-100 text-slate-600 ring-slate-200",
+};
+
+const field =
+  "w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20";
+
+export function CardView({ card, overdue, onEdit, onDelete, overlay }: ViewProps) {
+  const hasMeta = card.priority || card.dueDate || card.labels.length > 0;
   return (
     <div
       className={`group relative rounded-xl border border-slate-200/80 bg-white p-4 pr-16 shadow-sm transition-shadow hover:shadow-md ${
@@ -19,7 +29,31 @@ export function CardView({ card, onEdit, onDelete, overlay }: ViewProps) {
     >
       <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-accent" />
       <h3 className="text-sm font-semibold text-navy">{card.title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{card.details}</p>
+      {card.details && <p className="mt-1 text-sm leading-relaxed text-muted">{card.details}</p>}
+      {hasMeta && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          {card.priority && (
+            <span className={`rounded-full px-2 py-0.5 font-medium capitalize ring-1 ring-inset ${priorityStyle[card.priority]}`}>
+              {card.priority}
+            </span>
+          )}
+          {card.dueDate && (
+            <span
+              data-overdue={overdue || undefined}
+              className={`rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${
+                overdue ? "bg-red-600 text-white ring-red-600" : "bg-white text-navy ring-slate-200"
+              }`}
+            >
+              {overdue ? "Overdue" : "Due"} {formatDueDate(card.dueDate)}
+            </span>
+          )}
+          {card.labels.map((label) => (
+            <span key={label} className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="absolute right-2 top-2 flex">
         {onEdit && (
           <button
@@ -50,15 +84,24 @@ export function CardView({ card, onEdit, onDelete, overlay }: ViewProps) {
   );
 }
 
-type EditProps = { card: Card; onSave: (title: string, details: string) => void; onCancel: () => void };
+type EditProps = { card: Card; onSave: (fields: CardFields) => void; onCancel: () => void };
 
 function CardEditor({ card, onSave, onCancel }: EditProps) {
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
+  const [priority, setPriority] = useState<Priority | "">(card.priority ?? "");
+  const [dueDate, setDueDate] = useState(card.dueDate ?? "");
+  const [labels, setLabels] = useState(card.labels.join(", "));
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    onSave(title.trim(), details.trim());
+    onSave({
+      title: title.trim(),
+      details: details.trim(),
+      priority: priority || null,
+      dueDate: dueDate || null,
+      labels: parseLabels(labels),
+    });
   }
 
   return (
@@ -69,14 +112,43 @@ function CardEditor({ card, onSave, onCancel }: EditProps) {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         aria-label="Edit card title"
-        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className={field}
       />
       <textarea
         value={details}
         onChange={(e) => setDetails(e.target.value)}
         aria-label="Edit card details"
         rows={3}
-        className="w-full resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className={`${field} resize-none`}
+      />
+      <div className="flex gap-2">
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value as Priority | "")}
+          aria-label="Priority"
+          className={field}
+        >
+          <option value="">No priority</option>
+          {PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {p[0].toUpperCase() + p.slice(1)}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          aria-label="Due date"
+          className={field}
+        />
+      </div>
+      <input
+        value={labels}
+        onChange={(e) => setLabels(e.target.value)}
+        placeholder="Labels, comma separated"
+        aria-label="Labels"
+        className={field}
       />
       <div className="flex justify-end gap-2">
         <button
@@ -97,9 +169,9 @@ function CardEditor({ card, onSave, onCancel }: EditProps) {
   );
 }
 
-type Props = { card: Card; onEdit: (title: string, details: string) => void; onDelete: () => void };
+type Props = { card: Card; overdue: boolean; onEdit: (fields: CardFields) => void; onDelete: () => void };
 
-export function KanbanCard({ card, onEdit, onDelete }: Props) {
+export function KanbanCard({ card, overdue, onEdit, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id, disabled: editing });
@@ -118,14 +190,14 @@ export function KanbanCard({ card, onEdit, onDelete }: Props) {
       {editing ? (
         <CardEditor
           card={card}
-          onSave={(title, details) => {
-            onEdit(title, details);
+          onSave={(fields) => {
+            onEdit(fields);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <CardView card={card} onEdit={() => setEditing(true)} onDelete={onDelete} />
+        <CardView card={card} overdue={overdue} onEdit={() => setEditing(true)} onDelete={onDelete} />
       )}
     </li>
   );

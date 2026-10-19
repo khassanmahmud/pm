@@ -1,14 +1,16 @@
-# Project Management MVP
+# Project Management App
 
-A Kanban board with an AI assistant. Sign in, manage cards across five columns with drag and drop, and ask the AI chat sidebar to create, edit or move cards for you.
+Kanban boards with an AI assistant. Create an account, keep several boards, manage cards across five columns with drag and drop, and ask the AI chat sidebar to create, edit, move or prioritize cards for you.
 
 ## Features
 
-- Sign in (MVP credentials: `user` / `password`)
-- One Kanban board per user with five fixed, renameable columns
-- Add, edit, delete and drag-and-drop cards
-- AI chat sidebar that answers questions about the board and updates it
-- Board saved in SQLite, kept across restarts
+- Accounts: sign up, sign in, change password, delete account (demo account `user` / `password` is always available)
+- Multiple boards per user: create (empty or with sample cards), switch, rename, delete
+- Five fixed, renameable columns per board
+- Cards with details, priority, due date and labels; add, edit, delete and drag and drop
+- Search and priority filter; overdue cards flagged; board progress and overdue counts
+- AI chat sidebar per board that answers questions about the board and updates it
+- Data saved in SQLite, kept across restarts
 
 ## Stack
 
@@ -36,7 +38,7 @@ Then start the app:
 .\scripts\start.ps1     # Windows
 ```
 
-Open http://localhost:8000 (bound to localhost only) and sign in with `user` / `password`. Stop with `./scripts/stop.sh` or `.\scripts\stop.ps1`.
+Open http://localhost:8000 (bound to localhost only) and create an account or sign in with `user` / `password`. Stop with `./scripts/stop.sh` or `.\scripts\stop.ps1`.
 
 Data lives in the Docker volume `pm-data`; `docker volume rm pm-data` resets it.
 
@@ -46,7 +48,7 @@ Data lives in the Docker volume `pm-data`; `docker volume rm pm-data` resets it.
 # Backend
 cd backend
 uv sync
-uv run pytest -m 'not live'     # drop -m to include live AI tests
+uv run pytest -m 'not live'     # drop -m to include live AI tests; add --cov=app for coverage
 uv run uvicorn app.main:app --reload
 
 # Frontend

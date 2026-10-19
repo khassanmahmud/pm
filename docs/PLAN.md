@@ -45,11 +45,27 @@ Testing
 - Playwright runs FastAPI (not Docker) on port 8100 with a fresh `backend/data/e2e.db`, a 1920x1080 viewport, and `workers: 1` because all tests share one user's board.
 - Live AI tests use the `live` pytest marker; they skip without `OPENROUTER_API_KEY` and can be deselected with `-m 'not live'`.
 
+Accounts and boards (Part 11)
+- Passwords are hashed with stdlib `hashlib.scrypt` (no new dependency). The session stores `user_id` and every request looks the user up, so deleting an account signs out all of its sessions.
+- Session cookie is `SameSite=Strict`, which blocks cross-site form posts (code review CSRF item) without a token.
+- The demo user `user` / `password` is ensured on every startup, so the Docker instructions and existing sessions keep working.
+- Schema versioned with `PRAGMA user_version`. The MVP schema (version 0) is migrated in one transaction: users keep their ids (without a password, so only the demo user can sign in), boards are named "Product Launch".
+- Board routes are `/api/boards/{id}`; boards of other users answer 404, not 403, so ids are not revealed.
+- New users get the sample board. New boards start empty or, on request, with the sample cards. Deleting the last board is allowed (empty state).
+- Card fields `priority`, `dueDate`, `labels` default to null / null / `[]`, so MVP boards load unchanged. `dueDate` is a string validated as an ISO date, so the AI's strict JSON schema has no `format` keyword; `labels` uses `default_factory` so the schema has no `default`.
+- The AI prompt includes today's date so relative due dates ("next Friday") work.
+- Search and the priority filter are view-only (not saved). Filtered columns pass only matching cards to dnd-kit; drop positions are computed against the full column.
+- The selected board is remembered in `localStorage`. The chat sidebar is remounted per board, so each board has its own conversation. The board list is locked with the board while the AI responds, so a reply cannot land on another board.
+- The frontend test fixture imports `backend/app/default_board.json` directly (the Dockerfile copies it into the Node stage because `next build` type-checks tests).
+- E2E tests register a unique user each, instead of resetting one shared board.
+
 ## Known limitations
 
 - AI edits take 10-20s (longer if retried) because the model returns the whole board.
 - Board edits from another tab while the AI is responding are overwritten by the AI's board (last write wins). The current tab is locked during the request.
-- Below about 1550px wide (with the sidebar open) the board scrolls horizontally.
+- Below about 1850px wide (with both sidebars open) the board scrolls horizontally.
+- Boards cannot be shared between users; columns are still fixed.
+- No password reset (there is no email); an admin would have to delete the account in SQLite.
 - Windows scripts (`start.ps1`, `stop.ps1`) have not been run on Windows.
 
 ## Part 1: Plan
@@ -142,3 +158,16 @@ Tests: pytest with mocked AI: reply only (board unchanged), reply with board upd
 - [x] Styled with the project color scheme
 
 Tests: Vitest with mocked fetch (sends history, renders replies, applies board update). Playwright with mocked `/api/chat` route verifying the board refreshes. Manual check with the live AI.
+
+## Part 11: User management, multiple boards, richer cards
+
+- [x] Schema version 1: `users.password_hash`, `created_at`; `boards.name`, `created_at`, many boards per user, cascade delete; migration from the MVP schema
+- [x] `POST /api/register`, login against the database, `POST /api/account/password`, `DELETE /api/account`
+- [x] Board routes: list, create (empty or sample), rename, delete, get, put, chat, all scoped to the signed-in user
+- [x] Card `priority`, `dueDate`, `labels`, validated on every write; AI prompt describes them
+- [x] Frontend: create account form, board sidebar (switch, create), board rename / delete, account settings
+- [x] Card editor fields and badges, overdue flag, search and priority filter, progress and overdue stats
+- [x] Docs updated (`AGENTS.md` files, `DATABASE.md`, `README.md`, `CLAUDE.md`)
+
+Tests: pytest (registration, validation, password change, account deletion and session invalidation, hashing, board CRUD, ownership 404s, card field validation, migration, chat per board) with `pytest-cov` (99% of `app`, the rest needs a live key). Vitest (helpers, components, `App` against an in-memory API fake) with `npm run test:coverage`. Playwright: `auth`, `account`, `boards`, `board`, `chat` specs, each test with its own user.
+
