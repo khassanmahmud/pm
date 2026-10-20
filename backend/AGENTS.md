@@ -5,7 +5,7 @@ FastAPI app, Python 3.13, managed with uv.
 ## Structure
 
 - `app/main.py` - FastAPI app. API routes under `/api`; the Next.js export in `../frontend/out` is mounted at `/` (must stay last). Run `npm run build` in `frontend/` to serve the UI locally
-- `app/models.py` - Pydantic `Board` / `Column` / `Card` (optional `priority`, `dueDate`, `labels`), `BoardSummary`, `EMPTY_BOARD`; `Board` validates fixed column ids and card consistency
+- `app/models.py` - Pydantic `Board` / `Column` / `Card` (optional `priority`, `dueDate`, `labels`), `BoardSummary`, `EMPTY_BOARD`, `DEFAULT_BOARD` (parsed from `default_board.json`); `Board` validates fixed column ids and card consistency
 - `app/auth.py` - `hash_password` / `verify_password` (stdlib scrypt)
 - `app/db.py` - SQLite via `sqlite3`: `init_db` (run in app lifespan; creates or migrates the schema via `PRAGMA user_version`, ensures the demo user), user functions (`create_user`, `authenticate`, `check_password`, `set_password`, `delete_user`) and board functions scoped by user id (`list_boards`, `create_board`, `get_board`, `save_board`, `rename_board`, `delete_board`). Path from `DB_PATH`, default `data/pm.db`
 - `app/default_board.json` - board seeded for new users (also the frontend test fixture)

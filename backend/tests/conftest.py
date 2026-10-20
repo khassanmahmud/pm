@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 
@@ -7,12 +6,12 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.db import DEFAULT_BOARD
 from app.main import app
+from app.models import DEFAULT_BOARD
 
 load_dotenv(Path(__file__).parents[2] / ".env")
 
-DEFAULT = json.loads(DEFAULT_BOARD)
+DEFAULT = DEFAULT_BOARD.model_dump()
 
 
 def live(test):

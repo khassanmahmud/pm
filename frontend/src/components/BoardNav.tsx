@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BoardSummary } from "@/lib/board";
+import { cancelButton, inlineInput, outlineButton, submitButton } from "./ui";
 
 type Props = {
   username: string;
@@ -74,7 +75,7 @@ export function BoardNav({ username, boards, selectedId, onSelect, onCreate, onA
               onChange={(e) => setName(e.target.value)}
               placeholder="Board name"
               aria-label="Board name"
-              className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className={inlineInput}
             />
             <label className="flex items-center gap-2 text-xs text-muted">
               <input type="checkbox" checked={sample} onChange={(e) => setSample(e.target.checked)} />
@@ -84,13 +85,13 @@ export function BoardNav({ username, boards, selectedId, onSelect, onCreate, onA
               <button
                 type="button"
                 onClick={() => setCreating(false)}
-                className="rounded-md px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-navy"
+                className={cancelButton}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-secondary/90"
+                className={submitButton}
               >
                 Create
               </button>
@@ -116,14 +117,14 @@ export function BoardNav({ username, boards, selectedId, onSelect, onCreate, onA
             type="button"
             onClick={onAccount}
             aria-current={accountOpen ? "page" : undefined}
-            className="flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:border-primary hover:text-primary"
+            className={`flex-1 ${outlineButton}`}
           >
             Account
           </button>
           <button
             type="button"
             onClick={onLogout}
-            className="flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:border-primary hover:text-primary"
+            className={`flex-1 ${outlineButton}`}
           >
             Log out
           </button>

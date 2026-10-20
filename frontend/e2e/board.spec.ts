@@ -16,6 +16,19 @@ async function drag(page: Page, source: Locator, target: Locator) {
   await page.mouse.up();
 }
 
+async function openEditor(card: Locator, title: string) {
+  await card.hover();
+  await card.getByRole("button", { name: `Edit ${title}` }).click();
+}
+
+async function removeCard(card: Locator, title: string) {
+  await card.hover();
+  await card.getByRole("button", { name: `Delete ${title}` }).click();
+}
+
+const cardOrder = (page: Page, columnId: string) =>
+  page.getByTestId(`column-${columnId}`).locator("li").evaluateAll((els) => els.map((el) => el.dataset.testid));
+
 let username: string;
 
 test.beforeEach(async ({ page }) => {
@@ -57,9 +70,7 @@ test("requires a title to add a card", async ({ page }) => {
 });
 
 test("deletes a card", async ({ page }) => {
-  const card = page.getByTestId("card-c1");
-  await card.hover();
-  await card.getByRole("button", { name: "Delete Competitor research" }).click();
+  await removeCard(page.getByTestId("card-c1"), "Competitor research");
   await expect(page.getByText("Competitor research")).toHaveCount(0);
   await expect(page.getByText("9 cards across 5 columns")).toBeVisible();
 });
@@ -71,9 +82,7 @@ test("drags a card to another column", async ({ page }) => {
 });
 
 test("drags a card into an empty column", async ({ page }) => {
-  const card = page.getByTestId("card-c8");
-  await card.hover();
-  await card.getByRole("button", { name: "Delete Email notifications" }).click();
+  await removeCard(page.getByTestId("card-c8"), "Email notifications");
   await expect(page.getByTestId("column-review").locator("li")).toHaveCount(0);
   await drag(page, page.getByTestId("card-c4"), page.getByTestId("column-review"));
   await expect(page.getByTestId("column-review").getByTestId("card-c4")).toBeVisible();
@@ -81,16 +90,12 @@ test("drags a card into an empty column", async ({ page }) => {
 
 test("reorders cards within a column", async ({ page }) => {
   await drag(page, page.getByTestId("card-c1"), page.getByTestId("card-c3"));
-  const ids = await page.getByTestId("column-backlog").locator("li").evaluateAll((els) =>
-    els.map((el) => el.dataset.testid),
-  );
-  expect(ids).toEqual(["card-c2", "card-c3", "card-c1"]);
+  expect(await cardOrder(page, "backlog")).toEqual(["card-c2", "card-c3", "card-c1"]);
 });
 
 test("edits a card", async ({ page }) => {
   const card = page.getByTestId("card-c4");
-  await card.hover();
-  await card.getByRole("button", { name: "Edit Onboarding flow" }).click();
+  await openEditor(card, "Onboarding flow");
   await card.getByLabel("Edit card title").fill("Onboarding v2");
   await card.getByLabel("Edit card details").fill("Two steps only");
   await card.getByRole("button", { name: "Save" }).click();
@@ -101,8 +106,7 @@ test("edits a card", async ({ page }) => {
 
 test("cancels editing a card", async ({ page }) => {
   const card = page.getByTestId("card-c4");
-  await card.hover();
-  await card.getByRole("button", { name: "Edit Onboarding flow" }).click();
+  await openEditor(card, "Onboarding flow");
   await card.getByLabel("Edit card title").fill("Discarded");
   await card.getByRole("button", { name: "Cancel" }).click();
   await expect(card.getByText("Onboarding flow")).toBeVisible();
@@ -110,8 +114,7 @@ test("cancels editing a card", async ({ page }) => {
 
 test("edited card can still be dragged", async ({ page }) => {
   const card = page.getByTestId("card-c4");
-  await card.hover();
-  await card.getByRole("button", { name: "Edit Onboarding flow" }).click();
+  await openEditor(card, "Onboarding flow");
   await card.getByLabel("Edit card title").fill("Moved after edit");
   await card.getByRole("button", { name: "Save" }).click();
   await drag(page, card, page.getByTestId("column-done"));
@@ -125,8 +128,7 @@ test("serves the API alongside the app", async ({ request }) => {
 
 test("edits priority, due date and labels", async ({ page }) => {
   const card = page.getByTestId("card-c3");
-  await card.hover();
-  await card.getByRole("button", { name: "Edit Mobile app spike" }).click();
+  await openEditor(card, "Mobile app spike");
   await card.getByLabel("Priority").selectOption("high");
   await card.getByLabel("Due date").fill("2030-03-04");
   await card.getByLabel("Labels").fill("mobile, research");
@@ -143,8 +145,7 @@ test("edits priority, due date and labels", async ({ page }) => {
 
 test("flags overdue cards", async ({ page }) => {
   const card = page.getByTestId("card-c1");
-  await card.hover();
-  await card.getByRole("button", { name: "Edit Competitor research" }).click();
+  await openEditor(card, "Competitor research");
   await card.getByLabel("Due date").fill("2001-02-03");
   await card.getByRole("button", { name: "Save" }).click();
   await expect(card.getByText("Overdue Feb 3")).toBeVisible();
@@ -167,7 +168,8 @@ test("drags a card while a filter is active", async ({ page }) => {
   const save = saved(page);
   await drag(page, page.getByTestId("card-c2"), page.getByTestId("column-done"));
   await save;
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  // dnd-kit swallows clicks for 50ms after a drop, so clear the filter without clicking.
+  await page.getByLabel("Filter by priority").selectOption("");
   await expect(page.getByTestId("column-done").getByTestId("card-c2")).toBeVisible();
   await expect(page.getByTestId("column-backlog").locator("li")).toHaveCount(2);
 });
@@ -186,8 +188,7 @@ test.describe("persistence", () => {
 
   test("edited card survives reload", async ({ page }) => {
     const card = page.getByTestId("card-c4");
-    await card.hover();
-    await card.getByRole("button", { name: "Edit Onboarding flow" }).click();
+    await openEditor(card, "Onboarding flow");
     await card.getByLabel("Edit card title").fill("Edited and saved");
     const save = saved(page);
     await card.getByRole("button", { name: "Save" }).click();
@@ -197,10 +198,8 @@ test.describe("persistence", () => {
   });
 
   test("deleted card stays deleted after reload", async ({ page }) => {
-    const card = page.getByTestId("card-c1");
-    await card.hover();
     const save = saved(page);
-    await card.getByRole("button", { name: "Delete Competitor research" }).click();
+    await removeCard(page.getByTestId("card-c1"), "Competitor research");
     await save;
     await reload(page);
     await expect(page.getByText("Competitor research")).toHaveCount(0);
@@ -221,10 +220,7 @@ test.describe("persistence", () => {
     await drag(page, page.getByTestId("card-c1"), page.getByTestId("card-c3"));
     await save;
     await reload(page);
-    const ids = await page.getByTestId("column-backlog").locator("li").evaluateAll((els) =>
-      els.map((el) => el.dataset.testid),
-    );
-    expect(ids).toEqual(["card-c2", "card-c3", "card-c1"]);
+    expect(await cardOrder(page, "backlog")).toEqual(["card-c2", "card-c3", "card-c1"]);
   });
 
   test("renamed column survives reload after Enter", async ({ page }) => {
@@ -250,10 +246,8 @@ test.describe("persistence", () => {
   });
 
   test("board survives sign out and back in", async ({ page }) => {
-    const card = page.getByTestId("card-c1");
-    await card.hover();
     const save = saved(page);
-    await card.getByRole("button", { name: "Delete Competitor research" }).click();
+    await removeCard(page.getByTestId("card-c1"), "Competitor research");
     await save;
     await page.getByRole("button", { name: "Log out" }).click();
     await signIn(page, username, PASSWORD);

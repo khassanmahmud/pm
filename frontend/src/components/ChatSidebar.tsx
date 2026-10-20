@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Board } from "@/lib/board";
+import { CloseIcon } from "./ui";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -79,9 +80,7 @@ export function ChatSidebar({ boardId, onBoardUpdate, beforeSend, onBusyChange, 
           aria-label="Close assistant"
           className="rounded-md p-1.5 text-muted transition hover:bg-slate-100 hover:text-navy"
         >
-          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-          </svg>
+          <CloseIcon />
         </button>
       </header>
 

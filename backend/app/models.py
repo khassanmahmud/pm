@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -57,6 +58,9 @@ EMPTY_BOARD = Board(
     ],
     cards={},
 )
+
+# Seeded for new users and used for sample boards.
+DEFAULT_BOARD = Board.model_validate_json((Path(__file__).parent / "default_board.json").read_text())
 
 
 class BoardSummary(BaseModel):

@@ -61,9 +61,9 @@ export function App() {
   }
 
   /** Returns the response if it succeeded; handles sign-out and errors otherwise. */
-  function check(response: Response): Response | null {
+  function check(response: Response, error = ACTION_ERROR): Response | null {
     if (response.status === 401) signOut();
-    else if (!response.ok) setError(ACTION_ERROR);
+    else if (!response.ok) setError(error);
     else return response;
     return null;
   }
@@ -79,8 +79,7 @@ export function App() {
       .then(() => api(`/api/boards/${id}`, "PUT", next))
       .then(
         (r) => {
-          if (r.status === 401) signOut();
-          else if (!r.ok) setError(SAVE_ERROR);
+          check(r, SAVE_ERROR);
         },
         () => setError(SAVE_ERROR),
       );
@@ -132,6 +131,41 @@ export function App() {
   const summary = boards.find((b) => b.id === boardId);
   const board = loaded && loaded.id === boardId ? loaded.board : null;
 
+  let content: React.ReactNode = null;
+  if (view === "account") {
+    content = <AccountSettings username={user} onDeleted={signOut} onUnauthorized={signOut} />;
+  } else if (summary && board) {
+    content = (
+      <>
+        {/* Locked while the AI works, so its board update cannot overwrite edits made meanwhile. */}
+        <KanbanBoard
+          name={summary.name}
+          board={board}
+          onChange={updateBoard}
+          onRename={renameBoard}
+          onDelete={deleteBoard}
+          locked={aiBusy}
+        />
+        {/* The backend already saved AI board updates, so only update local state. */}
+        <ChatSidebar
+          key={summary.id}
+          boardId={summary.id}
+          onBoardUpdate={(next) => updateBoard(next, false)}
+          beforeSend={() => saving.current}
+          onBusyChange={setAiBusy}
+          onUnauthorized={signOut}
+        />
+      </>
+    );
+  } else if (boards.length === 0) {
+    content = (
+      <main className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+        <h1 className="text-2xl font-bold tracking-tight text-navy">No boards yet</h1>
+        <p className="text-sm text-muted">Create a board from the sidebar to get started.</p>
+      </main>
+    );
+  }
+
   return (
     <div className="flex flex-1">
       {error && (
@@ -151,35 +185,7 @@ export function App() {
         accountOpen={view === "account"}
         locked={aiBusy}
       />
-      {view === "account" ? (
-        <AccountSettings username={user} onDeleted={signOut} onUnauthorized={signOut} />
-      ) : summary && board ? (
-        <>
-          {/* Locked while the AI works, so its board update cannot overwrite edits made meanwhile. */}
-          <KanbanBoard
-            name={summary.name}
-            board={board}
-            onChange={updateBoard}
-            onRename={renameBoard}
-            onDelete={deleteBoard}
-            locked={aiBusy}
-          />
-          {/* The backend already saved AI board updates, so only update local state. */}
-          <ChatSidebar
-            key={summary.id}
-            boardId={summary.id}
-            onBoardUpdate={(next) => updateBoard(next, false)}
-            beforeSend={() => saving.current}
-            onBusyChange={setAiBusy}
-            onUnauthorized={signOut}
-          />
-        </>
-      ) : boards.length === 0 ? (
-        <main className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-navy">No boards yet</h1>
-          <p className="text-sm text-muted">Create a board from the sidebar to get started.</p>
-        </main>
-      ) : null}
+      {content}
     </div>
   );
 }

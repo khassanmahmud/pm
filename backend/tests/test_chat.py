@@ -5,21 +5,15 @@ from types import SimpleNamespace
 import pytest
 from openai import APIConnectionError
 
-from app import ai, main
+from app import ai
 from app.ai import AIBoard, AIResponse, ChatMessage
-from app.db import DEFAULT_BOARD
+from app.models import DEFAULT_BOARD as DEFAULT
 from app.models import Board
 from conftest import live
-
-DEFAULT = Board.model_validate_json(DEFAULT_BOARD)
 
 # Every test starts with a fresh database, where the demo user's default board has id 1.
 board_url = "/api/boards/1"
 chat_url = f"{board_url}/chat"
-
-
-def ai_board(board: Board) -> AIBoard:
-    return AIBoard(columns=board.columns, cards=list(board.cards.values()))
 
 
 @pytest.fixture
@@ -34,7 +28,7 @@ def fake_chat(monkeypatch):
             raise result
         return result
 
-    monkeypatch.setattr(main.ai, "chat", chat)
+    monkeypatch.setattr(ai, "chat", chat)
     return fake
 
 
@@ -64,14 +58,14 @@ def test_chat_sends_current_board_history_and_message(signed_in, fake_chat):
 def test_chat_board_update_saved(signed_in, fake_chat):
     board = DEFAULT.model_copy(deep=True)
     board.cards["c1"].title = "Updated by AI"
-    fake_chat.response = AIResponse(reply="Done", board=ai_board(board))
+    fake_chat.response = AIResponse(reply="Done", board=AIBoard.from_board(board))
     response = signed_in.post(chat_url, json={"message": "rename c1"})
     assert response.json() == {"reply": "Done", "board": board.model_dump()}
     assert signed_in.get(board_url).json() == board.model_dump()
 
 
 def invalid_board() -> AIBoard:
-    board = ai_board(DEFAULT)
+    board = AIBoard.from_board(DEFAULT)
     board.columns.pop()
     return board
 
@@ -82,7 +76,7 @@ def test_chat_reply_only_calls_ai_once(signed_in, fake_chat):
 
 
 def test_chat_valid_board_calls_ai_once(signed_in, fake_chat):
-    fake_chat.response = AIResponse(reply="Done", board=ai_board(DEFAULT))
+    fake_chat.response = AIResponse(reply="Done", board=AIBoard.from_board(DEFAULT))
     signed_in.post(chat_url, json={"message": "noop"})
     assert len(fake_chat.calls) == 1
 
@@ -92,7 +86,7 @@ def test_chat_retries_after_invalid_board(signed_in, fake_chat):
     board.cards["c1"].title = "Second try"
     fake_chat.responses = [
         AIResponse(reply="Broken", board=invalid_board()),
-        AIResponse(reply="Fixed", board=ai_board(board)),
+        AIResponse(reply="Fixed", board=AIBoard.from_board(board)),
     ]
     response = signed_in.post(chat_url, json={"message": "rename c1"})
     assert response.json() == {"reply": "Fixed", "board": board.model_dump()}
@@ -121,7 +115,7 @@ def test_chat_invalid_twice_not_saved(signed_in, fake_chat):
 
 
 def test_chat_duplicate_card_ids_not_saved(signed_in, fake_chat):
-    dup = ai_board(DEFAULT)
+    dup = AIBoard.from_board(DEFAULT)
     dup.cards.append(dup.cards[0].model_copy(update={"title": "Clash"}))
     fake_chat.response = AIResponse(reply="Added", board=dup)
     assert signed_in.post(chat_url, json={"message": "add"}).json()["board"] is None
@@ -155,7 +149,7 @@ def test_chat_updates_only_its_board(signed_in, fake_chat):
     other = signed_in.post("/api/boards", json={"name": "Other"}).json()["id"]
     board = DEFAULT.model_copy(deep=True)
     board.cards["c1"].priority = "high"
-    fake_chat.response = AIResponse(reply="Done", board=ai_board(board))
+    fake_chat.response = AIResponse(reply="Done", board=AIBoard.from_board(board))
     signed_in.post(f"/api/boards/{other}/chat", json={"message": "copy"})
     assert fake_chat.calls[0][0].cards == {}  # the AI saw the empty board
     assert signed_in.get(f"/api/boards/{other}").json() == board.model_dump()
@@ -164,22 +158,27 @@ def test_chat_updates_only_its_board(signed_in, fake_chat):
 
 def test_ai_response_rejects_invalid_due_date():
     """The SDK parses the reply into AIResponse, so a bad date raises and the route retries."""
-    data = AIResponse(reply="Set", board=ai_board(DEFAULT)).model_dump()
+    data = AIResponse(reply="Set", board=AIBoard.from_board(DEFAULT)).model_dump()
     data["board"]["cards"][0]["dueDate"] = "soon"
     with pytest.raises(ValueError):
         AIResponse.model_validate(data)
 
 
-def test_ai_chat_builds_messages(monkeypatch):
+def fake_client(monkeypatch, parsed) -> dict:
+    """Replace the OpenAI client so parse() returns `parsed`. Returns the captured parse() arguments."""
     captured = {}
 
     def parse(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed="parsed"))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=parsed))])
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=parse)))
-    monkeypatch.setattr(ai, "client", lambda: fake_client)
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=parse)))
+    monkeypatch.setattr(ai, "client", lambda: client)
+    return captured
 
+
+def test_ai_chat_builds_messages(monkeypatch):
+    captured = fake_client(monkeypatch, "parsed")
     history = [ChatMessage(role="user", content="hi"), ChatMessage(role="assistant", content="Hello")]
     assert ai.chat(DEFAULT, history, "next") == "parsed"
 
@@ -198,11 +197,7 @@ def test_ai_chat_builds_messages(monkeypatch):
 
 
 def test_ai_chat_raises_when_nothing_parsed(monkeypatch):
-    def parse(**kwargs):
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=None))])
-
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=parse)))
-    monkeypatch.setattr(ai, "client", lambda: fake_client)
+    fake_client(monkeypatch, None)
     with pytest.raises(ValueError):
         ai.chat(DEFAULT, [], "hi")
 

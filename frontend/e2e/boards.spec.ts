@@ -1,13 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boardList, newUser, saved } from "./helpers";
-
-async function createBoard(page: Page, name: string, sample = false) {
-  await boardList(page).getByRole("button", { name: /new board/i }).click();
-  await boardList(page).getByLabel("Board name").fill(name);
-  if (sample) await boardList(page).getByLabel("Start with sample cards").check();
-  await boardList(page).getByRole("button", { name: "Create" }).click();
-  await expect(page.getByRole("heading", { name })).toBeVisible();
-}
+import { boardList, createBoard, newUser, saved } from "./helpers";
 
 const boardButton = (page: Page, name: string) => boardList(page).getByRole("button", { name: new RegExp(name) });
 

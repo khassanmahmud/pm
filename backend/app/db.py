@@ -5,10 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.auth import hash_password, verify_password
-from app.models import Board, BoardSummary
+from app.models import DEFAULT_BOARD, Board, BoardSummary
 
 DEFAULT_DB_PATH = Path(__file__).parents[1] / "data" / "pm.db"
-DEFAULT_BOARD = (Path(__file__).parent / "default_board.json").read_text()
 DEFAULT_BOARD_NAME = "Product Launch"
 DEMO_USER = ("user", "password")
 SCHEMA_VERSION = 1
@@ -31,6 +30,7 @@ CREATE TABLE IF NOT EXISTS boards (
 CREATE INDEX IF NOT EXISTS boards_user_id ON boards(user_id);
 """
 
+
 # Version 0 (the MVP) had users without passwords and one board per user (boards.user_id UNIQUE, no name).
 def migrate_v0() -> str:
     return f"""
@@ -43,6 +43,7 @@ INSERT INTO boards (id, user_id, name, data, created_at, updated_at)
 DROP TABLE boards_v0;
 DROP TABLE users_v0;
 """
+
 
 SUMMARY = """SELECT id, name, (SELECT COUNT(*) FROM json_each(data, '$.cards')), updated_at FROM boards"""
 
@@ -112,7 +113,7 @@ def create_user(username: str, password: str) -> int:
             ).lastrowid
         except sqlite3.IntegrityError:
             raise UsernameTaken(username) from None
-        _insert_board(conn, user_id, DEFAULT_BOARD_NAME, Board.model_validate_json(DEFAULT_BOARD))
+        _insert_board(conn, user_id, DEFAULT_BOARD_NAME, DEFAULT_BOARD)
     return user_id
 
 

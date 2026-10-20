@@ -2,14 +2,11 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { fieldLabel, formInput } from "./ui";
 
 type Props = { username: string; onDeleted: () => void; onUnauthorized: () => void };
 
 type Status = { ok: boolean; text: string } | null;
-
-const input =
-  "w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-navy outline-none focus:border-primary focus:ring-2 focus:ring-primary/20";
-const label = "text-xs font-medium uppercase tracking-wide text-muted";
 
 function Message({ status }: { status: Status }) {
   if (!status) return null;
@@ -60,18 +57,18 @@ export function AccountSettings({ username, onDeleted, onUnauthorized }: Props) 
       <form onSubmit={changePassword} className="mt-8 space-y-4 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-navy">Change password</h2>
         <label className="block space-y-1">
-          <span className={label}>Current password</span>
+          <span className={fieldLabel}>Current password</span>
           <input
             required
             type="password"
             autoComplete="current-password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className={input}
+            className={formInput}
           />
         </label>
         <label className="block space-y-1">
-          <span className={label}>New password</span>
+          <span className={fieldLabel}>New password</span>
           <input
             required
             type="password"
@@ -79,7 +76,7 @@ export function AccountSettings({ username, onDeleted, onUnauthorized }: Props) 
             minLength={8}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className={input}
+            className={formInput}
           />
         </label>
         <Message status={passwordStatus} />
@@ -95,14 +92,14 @@ export function AccountSettings({ username, onDeleted, onUnauthorized }: Props) 
         <h2 className="text-lg font-semibold text-red-700">Delete account</h2>
         <p className="text-sm text-muted">This permanently deletes your account and all of your boards.</p>
         <label className="block space-y-1">
-          <span className={label}>Confirm with your password</span>
+          <span className={fieldLabel}>Confirm with your password</span>
           <input
             required
             type="password"
             autoComplete="current-password"
             value={deletePassword}
             onChange={(e) => setDeletePassword(e.target.value)}
-            className={input}
+            className={formInput}
           />
         </label>
         <Message status={deleteStatus} />

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Board, BoardSummary } from "@/lib/board";
+import { deferred, sleep } from "@/test/async";
 import { initialBoard } from "@/test/sampleBoard";
 import { App } from "./App";
 
@@ -342,14 +343,13 @@ describe("App saving", () => {
   });
 
   it("waits for each save to finish before sending the next", async () => {
-    let release!: () => void;
-    const firstSave = new Promise<void>((resolve) => (release = resolve));
+    const firstSave = deferred();
     const bodies: Board[] = [];
     fakeApi({
       overrides: {
         "PUT /api/boards/1": async (init) => {
           bodies.push(JSON.parse(init!.body as string));
-          if (bodies.length === 1) await firstSave;
+          if (bodies.length === 1) await firstSave.promise;
           return { status: 200, body: {} };
         },
       },
@@ -358,21 +358,20 @@ describe("App saving", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Delete SSO integration" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete Brand refresh" }));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 50));
+    await sleep(50);
     expect(bodies).toHaveLength(1);
-    release();
+    firstSave.resolve();
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(Object.keys(bodies[0].cards)).toHaveLength(9);
     expect(Object.keys(bodies[1].cards)).toHaveLength(8);
   });
 
   it("loads a board only after pending saves finish", async () => {
-    let release!: () => void;
-    const save = new Promise<void>((resolve) => (release = resolve));
+    const save = deferred();
     const { state } = fakeApi({
       overrides: {
         "PUT /api/boards/1": async () => {
-          await save;
+          await save.promise;
           return { status: 200, body: {} };
         },
       },
@@ -381,9 +380,9 @@ describe("App saving", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Delete SSO integration" }));
     await userEvent.click(nav().getByRole("button", { name: /Website/ }));
-    await new Promise((r) => setTimeout(r, 30));
+    await sleep(30);
     expect(screen.queryByRole("heading", { name: "Website" })).not.toBeInTheDocument();
-    release();
+    save.resolve();
     expect(await screen.findByRole("heading", { name: "Website" })).toBeInTheDocument();
   });
 });
@@ -398,12 +397,11 @@ describe("App chat", () => {
   });
 
   it("locks the board and the board list while the AI is responding", async () => {
-    let release!: () => void;
-    const reply = new Promise<void>((resolve) => (release = resolve));
+    const reply = deferred();
     fakeApi({
       overrides: {
         "POST /api/boards/1/chat": async () => {
-          await reply;
+          await reply.promise;
           return { status: 200, body: { reply: "ok", board: null } };
         },
       },
@@ -415,7 +413,7 @@ describe("App chat", () => {
     await sendChat("hi");
     await waitFor(() => expect(board).toHaveAttribute("inert"));
     expect(boardList).toHaveAttribute("inert");
-    release();
+    reply.resolve();
     await screen.findByText("ok");
     expect(board).not.toHaveAttribute("inert");
     expect(boardList).not.toHaveAttribute("inert");
@@ -436,13 +434,12 @@ describe("App chat", () => {
   });
 
   it("sends chat only after a pending board save completes", async () => {
-    let release!: () => void;
-    const save = new Promise<void>((resolve) => (release = resolve));
+    const save = deferred();
     const order: string[] = [];
     fakeApi({
       overrides: {
         "PUT /api/boards/1": async () => {
-          await save;
+          await save.promise;
           order.push("put done");
           return { status: 200, body: {} };
         },
@@ -455,9 +452,9 @@ describe("App chat", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Delete SSO integration" }));
     await sendChat("What changed?");
-    await new Promise((r) => setTimeout(r, 30));
+    await sleep(30);
     expect(order).toEqual([]);
-    release();
+    save.resolve();
     await screen.findByText("ok");
     expect(order).toEqual(["put done", "chat"]);
   });

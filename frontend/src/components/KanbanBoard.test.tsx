@@ -6,12 +6,10 @@ import type { Board } from "@/lib/board";
 import { initialBoard } from "@/test/sampleBoard";
 import { KanbanBoard } from "./KanbanBoard";
 
-const handlers = { onRename: vi.fn(), onDelete: vi.fn() };
-
 function renderBoard(start: Board = initialBoard) {
   const onChange = vi.fn();
-  handlers.onRename = vi.fn();
-  handlers.onDelete = vi.fn();
+  const onRename = vi.fn();
+  const onDelete = vi.fn();
   function Harness() {
     const [board, setBoard] = useState(start);
     return (
@@ -22,12 +20,13 @@ function renderBoard(start: Board = initialBoard) {
           setBoard(next);
           onChange(next, persist);
         }}
-        {...handlers}
+        onRename={onRename}
+        onDelete={onDelete}
       />
     );
   }
   render(<Harness />);
-  return onChange;
+  return { onChange, onRename, onDelete };
 }
 
 const columnCards = (id: string) =>
@@ -116,7 +115,7 @@ describe("KanbanBoard", () => {
   });
 
   it("saves each card change", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     const column = within(screen.getByTestId("column-todo"));
     await userEvent.click(column.getByRole("button", { name: /add a card/i }));
     await userEvent.type(column.getByLabelText("Card title"), "New");
@@ -133,7 +132,7 @@ describe("KanbanBoard", () => {
   });
 
   it("does not save a rename while typing, only on blur", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     const input = within(screen.getByTestId("column-review")).getByLabelText("Column title");
     await userEvent.clear(input);
     await userEvent.type(input, "QA");
@@ -145,7 +144,7 @@ describe("KanbanBoard", () => {
   });
 
   it("saves a rename on Enter", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     const input = within(screen.getByTestId("column-review")).getByLabelText("Column title");
     await userEvent.clear(input);
     await userEvent.type(input, "QA{Enter}");
@@ -153,6 +152,7 @@ describe("KanbanBoard", () => {
     expect(saves(onChange)).toHaveLength(1);
     expect(saves(onChange)[0][0].columns[3].title).toBe("QA");
   });
+
   it("shows the board name and stats", () => {
     renderBoard();
     expect(screen.getByRole("heading", { name: "Product Launch" })).toBeInTheDocument();
@@ -160,7 +160,7 @@ describe("KanbanBoard", () => {
   });
 
   it("edits priority, due date and labels", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     await userEvent.click(screen.getByRole("button", { name: "Edit Mobile app spike" }));
     await userEvent.selectOptions(screen.getByLabelText("Priority"), "high");
     await userEvent.type(screen.getByLabelText("Due date"), "2030-01-15");
@@ -179,7 +179,7 @@ describe("KanbanBoard", () => {
   });
 
   it("clears priority and due date", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     await userEvent.click(screen.getByRole("button", { name: "Edit Onboarding flow" }));
     await userEvent.selectOptions(screen.getByLabelText("Priority"), "");
     await userEvent.clear(screen.getByLabelText("Due date"));
@@ -221,42 +221,42 @@ describe("KanbanBoard", () => {
   });
 
   it("does not change the board when filtering", async () => {
-    const onChange = renderBoard();
+    const { onChange } = renderBoard();
     await userEvent.type(screen.getByLabelText("Search cards"), "zzz");
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByText("10 cards across 5 columns")).toBeInTheDocument();
   });
 
   it("renames the board", async () => {
-    renderBoard();
+    const { onRename } = renderBoard();
     await userEvent.click(screen.getByRole("button", { name: "Rename" }));
     const input = screen.getByLabelText("Board name");
     expect(input).toHaveValue("Product Launch");
     await userEvent.clear(input);
     await userEvent.type(input, "  Launch v2 {Enter}");
-    expect(handlers.onRename).toHaveBeenCalledWith("Launch v2");
+    expect(onRename).toHaveBeenCalledWith("Launch v2");
     expect(screen.queryByLabelText("Board name")).not.toBeInTheDocument();
   });
 
   it("does not rename when the name is unchanged or cancelled", async () => {
-    renderBoard();
+    const { onRename } = renderBoard();
     await userEvent.click(screen.getByRole("button", { name: "Rename" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await userEvent.click(screen.getByRole("button", { name: "Rename" }));
     await userEvent.type(screen.getByLabelText("Board name"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(handlers.onRename).not.toHaveBeenCalled();
+    expect(onRename).not.toHaveBeenCalled();
   });
 
   it("asks for confirmation before deleting the board", async () => {
-    renderBoard();
+    const { onDelete } = renderBoard();
     await userEvent.click(screen.getByRole("button", { name: "Delete board" }));
     await userEvent.click(screen.getByRole("button", { name: "Keep" }));
-    expect(handlers.onDelete).not.toHaveBeenCalled();
+    expect(onDelete).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Delete board" }));
     expect(screen.getByText("Delete this board?")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
-    expect(handlers.onDelete).toHaveBeenCalledOnce();
+    expect(onDelete).toHaveBeenCalledOnce();
   });
 
   it("is inert while locked", () => {

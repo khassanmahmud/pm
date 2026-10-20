@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatDueDate, parseLabels, PRIORITIES, type Card, type CardFields, type Priority } from "@/lib/board";
+import { cancelButton, CloseIcon, inlineInput, priorityName, submitButton } from "./ui";
 
 type ViewProps = { card: Card; overdue?: boolean; onEdit?: () => void; onDelete?: () => void; overlay?: boolean };
 
@@ -15,9 +16,6 @@ const priorityStyle: Record<Priority, string> = {
   medium: "bg-accent/15 text-amber-800 ring-accent/40",
   low: "bg-slate-100 text-slate-600 ring-slate-200",
 };
-
-const field =
-  "w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 export function CardView({ card, overdue, onEdit, onDelete, overlay }: ViewProps) {
   const hasMeta = card.priority || card.dueDate || card.labels.length > 0;
@@ -74,9 +72,7 @@ export function CardView({ card, overdue, onEdit, onDelete, overlay }: ViewProps
             aria-label={`Delete ${card.title}`}
             className={`${iconButton} hover:bg-red-50 hover:text-red-600`}
           >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
+            <CloseIcon />
           </button>
         )}
       </div>
@@ -112,26 +108,26 @@ function CardEditor({ card, onSave, onCancel }: EditProps) {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         aria-label="Edit card title"
-        className={field}
+        className={inlineInput}
       />
       <textarea
         value={details}
         onChange={(e) => setDetails(e.target.value)}
         aria-label="Edit card details"
         rows={3}
-        className={`${field} resize-none`}
+        className={`${inlineInput} resize-none`}
       />
       <div className="flex gap-2">
         <select
           value={priority}
           onChange={(e) => setPriority(e.target.value as Priority | "")}
           aria-label="Priority"
-          className={field}
+          className={inlineInput}
         >
           <option value="">No priority</option>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p[0].toUpperCase() + p.slice(1)}
+              {priorityName(p)}
             </option>
           ))}
         </select>
@@ -140,7 +136,7 @@ function CardEditor({ card, onSave, onCancel }: EditProps) {
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
           aria-label="Due date"
-          className={field}
+          className={inlineInput}
         />
       </div>
       <input
@@ -148,19 +144,19 @@ function CardEditor({ card, onSave, onCancel }: EditProps) {
         onChange={(e) => setLabels(e.target.value)}
         placeholder="Labels, comma separated"
         aria-label="Labels"
-        className={field}
+        className={inlineInput}
       />
       <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-navy"
+          className={cancelButton}
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-secondary/90"
+          className={submitButton}
         >
           Save
         </button>

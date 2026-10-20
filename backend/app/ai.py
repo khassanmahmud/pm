@@ -1,6 +1,6 @@
 import os
 from datetime import date
-from typing import Literal
+from typing import Literal, Self
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -35,6 +35,10 @@ class AIBoard(BaseModel):
     columns: list[Column]
     cards: list[Card]
 
+    @classmethod
+    def from_board(cls, board: Board) -> Self:
+        return cls(columns=board.columns, cards=list(board.cards.values()))
+
     def to_board(self) -> Board:
         cards = {c.id: c for c in self.cards}
         if len(cards) != len(self.cards):
@@ -60,9 +64,9 @@ def ask(prompt: str) -> str:
 
 
 def chat(board: Board, history: list[ChatMessage], message: str) -> AIResponse:
-    ai_board = AIBoard(columns=board.columns, cards=list(board.cards.values()))
+    board_json = AIBoard.from_board(board).model_dump_json()
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(board=ai_board.model_dump_json(), today=date.today().isoformat())},
+        {"role": "system", "content": SYSTEM_PROMPT.format(board=board_json, today=date.today().isoformat())},
         *(m.model_dump() for m in history),
         {"role": "user", "content": message},
     ]

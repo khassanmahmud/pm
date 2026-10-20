@@ -34,6 +34,7 @@ import {
 } from "@/lib/board";
 import { KanbanColumn } from "./KanbanColumn";
 import { CardView } from "./KanbanCard";
+import { outlineButton, priorityName } from "./ui";
 
 // Prefer what is under the pointer; closestCorners alone picks nearby cards over tall empty columns.
 const collisionDetection: CollisionDetection = (args) => {
@@ -50,14 +51,14 @@ type Props = {
   locked?: boolean;
 };
 
-const button =
-  "rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:border-primary hover:text-primary";
+const NO_FILTER: Filter = { query: "", priority: "" };
+
 const input =
   "rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked = false }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>({ query: "", priority: "" });
+  const [filter, setFilter] = useState(NO_FILTER);
   const [renaming, setRenaming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const overdue = useMemo(() => new Set(overdueCardIds(board)), [board]);
@@ -66,10 +67,11 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  function targetIndex(overId: string, columnId: string) {
+  /** Moves a card into a column, at the position of the card it is over or else at the end. */
+  function moveOver(cardId: string, overId: string, columnId: string): Board {
     const cardIds = board.columns.find((c) => c.id === columnId)!.cardIds;
     const index = cardIds.indexOf(overId);
-    return index === -1 ? cardIds.length : index;
+    return moveCard(board, cardId, columnId, index === -1 ? cardIds.length : index);
   }
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -82,14 +84,14 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
     const to = findColumnId(board, String(over.id));
     if (!from || !to || from === to) return;
     // Live preview while dragging; saved on drag end.
-    onChange(moveCard(board, String(active.id), to, targetIndex(String(over.id), to)), false);
+    onChange(moveOver(String(active.id), String(over.id), to), false);
   }
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveId(null);
     const to = over && findColumnId(board, String(over.id));
     if (!to || active.id === over.id) return onChange(board);
-    onChange(moveCard(board, String(active.id), to, targetIndex(String(over.id), to)));
+    onChange(moveOver(String(active.id), String(over.id), to));
   }
 
   function handleDragCancel() {
@@ -130,7 +132,7 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
               <button type="submit" className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white">
                 Save
               </button>
-              <button type="button" onClick={() => setRenaming(false)} className={button}>
+              <button type="button" onClick={() => setRenaming(false)} className={outlineButton}>
                 Cancel
               </button>
             </form>
@@ -148,7 +150,7 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
             {overdue.size > 0 && <span className="font-medium text-red-600"> &middot; {overdue.size} overdue</span>}
           </p>
           {!renaming && (
-            <button type="button" onClick={() => setRenaming(true)} className={button}>
+            <button type="button" onClick={() => setRenaming(true)} className={outlineButton}>
               Rename
             </button>
           )}
@@ -162,12 +164,12 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
               >
                 Delete
               </button>
-              <button type="button" onClick={() => setConfirmingDelete(false)} className={button}>
+              <button type="button" onClick={() => setConfirmingDelete(false)} className={outlineButton}>
                 Keep
               </button>
             </span>
           ) : (
-            <button type="button" onClick={() => setConfirmingDelete(true)} className={`${button} hover:border-red-300 hover:text-red-600`}>
+            <button type="button" onClick={() => setConfirmingDelete(true)} className={`${outlineButton} hover:border-red-300 hover:text-red-600`}>
               Delete board
             </button>
           )}
@@ -192,12 +194,12 @@ export function KanbanBoard({ name, board, onChange, onRename, onDelete, locked 
           <option value="">All priorities</option>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p[0].toUpperCase() + p.slice(1)} priority
+              {priorityName(p)} priority
             </option>
           ))}
         </select>
         {filtering && (
-          <button type="button" onClick={() => setFilter({ query: "", priority: "" })} className={button}>
+          <button type="button" onClick={() => setFilter(NO_FILTER)} className={outlineButton}>
             Clear filters
           </button>
         )}

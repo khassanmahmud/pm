@@ -20,7 +20,7 @@ test("signs in with valid credentials", async ({ page }) => {
 
 test("rejects invalid credentials", async ({ page }) => {
   await signIn(page, "user", "wrong");
-  await expect(page.getByRole("alert").filter({ hasText: "Invalid username or password" })).toBeVisible();
+  await expect(alert(page)).toHaveText("Invalid username or password");
   await expect(board(page)).toHaveCount(0);
 });
 

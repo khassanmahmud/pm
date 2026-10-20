@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { newCard } from "../src/lib/board";
+import { deferred } from "../src/test/async";
 import { initialBoard } from "../src/test/sampleBoard";
-import { boardList, newUser } from "./helpers";
+import { boardList, createBoard, newUser } from "./helpers";
 
 async function mockChat(page: Page, reply: string, board: unknown = null) {
   const requests: unknown[] = [];
@@ -73,10 +74,7 @@ test("chat goes to the selected board and starts fresh per board", async ({ page
   });
   await send(page, "On the first board");
   await expect(page.getByTestId("chat-messages").getByText("Noted.")).toBeVisible();
-  await boardList(page).getByRole("button", { name: /new board/i }).click();
-  await boardList(page).getByLabel("Board name").fill("Second");
-  await boardList(page).getByRole("button", { name: "Create" }).click();
-  await expect(page.getByRole("heading", { name: "Second" })).toBeVisible();
+  await createBoard(page, "Second");
   await expect(page.getByTestId("chat-messages").getByText("On the first board")).toHaveCount(0);
   await send(page, "On the second board");
   await expect(page.getByTestId("chat-messages").getByText("Noted.")).toBeVisible();
@@ -105,10 +103,9 @@ test("sidebar can be closed and reopened", async ({ page }) => {
 });
 
 test("board cannot be edited while the AI is responding", async ({ page }) => {
-  let release!: () => void;
-  const replied = new Promise<void>((resolve) => (release = resolve));
+  const replied = deferred();
   await page.route("**/api/boards/*/chat", async (route) => {
-    await replied;
+    await replied.promise;
     await route.fulfill({ json: { reply: "Done.", board: null } });
   });
   await send(page, "Wait");
@@ -117,7 +114,7 @@ test("board cannot be edited while the AI is responding", async ({ page }) => {
   await card.hover({ force: true });
   await remove.click({ force: true });
   await expect(card).toBeVisible();
-  release();
+  replied.resolve();
   await expect(page.getByTestId("chat-messages").getByText("Done.")).toBeVisible();
   await card.hover();
   await remove.click();

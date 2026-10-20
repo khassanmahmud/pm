@@ -5,6 +5,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Card, CardFields, Column } from "@/lib/board";
 import { KanbanCard } from "./KanbanCard";
+import { cancelButton, inlineInput, submitButton } from "./ui";
 
 type Props = {
   column: Column;
@@ -79,7 +80,7 @@ export function KanbanColumn({ column, cards, overdue, onRename, onRenameDone, o
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Card title"
               aria-label="Card title"
-              className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className={inlineInput}
             />
             <textarea
               value={details}
@@ -87,19 +88,19 @@ export function KanbanColumn({ column, cards, overdue, onRename, onRenameDone, o
               placeholder="Details"
               aria-label="Card details"
               rows={3}
-              className="w-full resize-none rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-navy outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className={`${inlineInput} resize-none`}
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setAdding(false)}
-                className="rounded-md px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-navy"
+                className={cancelButton}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-secondary/90"
+                className={submitButton}
               >
                 Add card
               </button>

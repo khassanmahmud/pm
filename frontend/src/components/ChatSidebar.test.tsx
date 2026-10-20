@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { deferred, sleep } from "@/test/async";
 import { initialBoard } from "@/test/sampleBoard";
 import { ChatSidebar } from "./ChatSidebar";
 
@@ -81,12 +82,11 @@ describe("ChatSidebar", () => {
   });
 
   it("shows a loading indicator and disables send while waiting", async () => {
-    let release!: () => void;
-    const pending = new Promise<void>((r) => (release = r));
+    const pending = deferred();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        await pending;
+        await pending.promise;
         return Response.json({ reply: "Done", board: null });
       }),
     );
@@ -95,7 +95,7 @@ describe("ChatSidebar", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Thinking");
     await userEvent.type(screen.getByLabelText("Message"), "more");
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
-    release();
+    pending.resolve();
     await screen.findByText("Done");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -127,14 +127,13 @@ describe("ChatSidebar", () => {
   });
 
   it("waits for pending board saves before sending", async () => {
-    let release!: () => void;
-    const saves = new Promise<void>((r) => (release = r));
+    const saves = deferred();
     const bodies = mockChat(() => ({ reply: "ok" }));
-    renderSidebar(() => saves);
+    renderSidebar(() => saves.promise);
     await send("Hello");
-    await new Promise((r) => setTimeout(r, 30));
+    await sleep(30);
     expect(bodies).toHaveLength(0);
-    release();
+    saves.resolve();
     await waitFor(() => expect(bodies).toHaveLength(1));
   });
 

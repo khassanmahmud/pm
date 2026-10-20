@@ -20,6 +20,14 @@ export async function signIn(page: Page, username: string, password: string) {
 
 export const boardList = (page: Page) => page.getByRole("navigation", { name: "Boards" });
 
+export async function createBoard(page: Page, name: string, sample = false) {
+  await boardList(page).getByRole("button", { name: /new board/i }).click();
+  await boardList(page).getByLabel("Board name").fill(name);
+  if (sample) await boardList(page).getByLabel("Start with sample cards").check();
+  await boardList(page).getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+}
+
 export const saved = (page: Page) =>
   page.waitForResponse((r) => /\/api\/boards\/\d+$/.test(r.url()) && r.request().method() === "PUT" && r.ok());
 

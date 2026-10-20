@@ -11,7 +11,7 @@ from pydantic import BaseModel, StringConstraints
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import ai, db
-from app.models import EMPTY_BOARD, Board, BoardSummary
+from app.models import DEFAULT_BOARD, EMPTY_BOARD, Board, BoardSummary
 
 STATIC_DIR = Path(__file__).parents[2] / "frontend" / "out"
 
@@ -167,7 +167,7 @@ def list_boards(user: CurrentUser) -> list[BoardSummary]:
 
 @app.post("/api/boards", status_code=201)
 def create_board(new: NewBoard, user: CurrentUser) -> BoardSummary:
-    board = Board.model_validate_json(db.DEFAULT_BOARD) if new.sample else EMPTY_BOARD
+    board = DEFAULT_BOARD if new.sample else EMPTY_BOARD
     return db.create_board(user.id, new.name, board)
 
 
@@ -202,12 +202,11 @@ def chat(board_id: int, request: ChatRequest, user: CurrentUser) -> ChatResponse
     for _ in range(2):
         try:
             result = ai.chat(current, request.history, request.message)
-            if result.board is None:
-                return ChatResponse(reply=result.reply, board=None)
-            board = result.board.to_board()
+            board = result.board.to_board() if result.board else None
         except (ValueError, OpenAIError):  # ValueError includes pydantic ValidationError
             continue
-        db.save_board(user.id, board_id, board)
+        if board is not None:
+            db.save_board(user.id, board_id, board)
         return ChatResponse(reply=result.reply, board=board)
     if result is None:
         raise HTTPException(status_code=502, detail="The AI did not respond")

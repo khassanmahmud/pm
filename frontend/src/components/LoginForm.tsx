@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { fieldLabel, formInput } from "./ui";
 
 const REGISTER_ERRORS: Record<number, string> = {
   409: "That username is already taken",
@@ -31,8 +32,6 @@ export function LoginForm({ onLogin }: { onLogin: (username: string) => void }) 
     setError("");
   }
 
-  const input =
-    "w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-navy outline-none focus:border-primary focus:ring-2 focus:ring-primary/20";
   const title = registering ? "Create account" : "Sign in";
 
   return (
@@ -43,18 +42,18 @@ export function LoginForm({ onLogin }: { onLogin: (username: string) => void }) 
           <div className="mt-3 h-1 w-12 rounded-full bg-accent" />
         </div>
         <label className="block space-y-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Username</span>
+          <span className={fieldLabel}>Username</span>
           <input
             required
             autoFocus
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className={input}
+            className={formInput}
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted">Password</span>
+          <span className={fieldLabel}>Password</span>
           <input
             required
             type="password"
@@ -62,7 +61,7 @@ export function LoginForm({ onLogin }: { onLogin: (username: string) => void }) 
             minLength={registering ? 8 : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className={input}
+            className={formInput}
           />
         </label>
         {error && (
